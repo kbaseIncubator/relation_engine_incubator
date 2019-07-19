@@ -24,23 +24,27 @@ TAXID_IDX = 0
 NODES_PARENT_IDX = 1
 SEP = r'\s\|\s?'
 
-# returns mean, median, max, pop stddev
-def calculate_stats(path, feature_index):
+def extract_column_frequencies(path, column_index, init_with_first_column=False):
     d = defaultdict(int)
     with open(path) as f:
-        last_tax = -1
+        last_col = -1
         for l in f:
             l = re.split(SEP, l)
-            tax_id_str = l[TAXID_IDX].strip()
-            tax_id = int(tax_id_str)
-            d[tax_id_str] # init to 0 if not already in dict
-            if last_tax > tax_id:
-                raise ValueError('Found unsorted file {} at tax id {}'.format(path, tax_id))
-            last_tax = tax_id
-            d[l[feature_index].strip()] += 1
+            col1_str = l[0].strip()
+            col1 = int(col1_str)
+            if init_with_first_column:
+                d[col1_str] # init to 0 if not already in dict
+            if last_col > col1:
+                raise ValueError('Found unsorted file {} at tax id {}'.format(path, col1))
+            last_col = col1
+            d[l[column_index].strip()] += 1
+    return dict(d)
+
+# returns mean, median, max, pop stddev
+def calculate_stats(vals):
     # crappy efficiency here but meh
-    mean = stats.mean(d.values())
-    mx = max(d.values())
+    mean = stats.mean(vals)
+    mx = max(vals)
     hist_bins = []
     hist_bins_str = []
     bn = 1
@@ -50,11 +54,11 @@ def calculate_stats(path, feature_index):
         hist_bins_str.append(str(bn + 1) + '-' + str(bn * 10))
     hist_bins = [0, 1, 2, 3] + hist_bins
     hist_bins_str = ['0', '1', '2', '3-10'] + hist_bins_str
-    hist = np.histogram(list(d.values()), hist_bins)[0]
+    hist = np.histogram(list(vals), hist_bins)[0]
     return {'mean': mean,
-            'median': stats.median(d.values()),
+            'median': stats.median(vals),
             'max': mx,
-            'stddev': stats.pstdev(d.values(), mean),
+            'stddev': stats.pstdev(vals, mean),
             'hist': hist,
             'hist_bins': hist_bins_str
             }
@@ -79,9 +83,13 @@ def parseargs():
 def main():
     a = parseargs()
 
-    print_stats('Names per taxa', **calculate_stats(os.path.join(a.dir, NAMES_FILE), TAXID_IDX))
-    print_stats('Children per taxa',
-        **calculate_stats(os.path.join(a.dir, NODES_FILE), NODES_PARENT_IDX))
+    names_per_taxa = extract_column_frequencies(os.path.join(a.dir, NAMES_FILE), TAXID_IDX)
+    print_stats('Names per taxa', **calculate_stats(names_per_taxa.values()))
+    del names_per_taxa
+
+    children_per_taxa = extract_column_frequencies(
+        os.path.join(a.dir, NODES_FILE), NODES_PARENT_IDX, True)
+    print_stats('Children per taxa', **calculate_stats(children_per_taxa.values()))
 
 if __name__ == '__main__':
     main()
