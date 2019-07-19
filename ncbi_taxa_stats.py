@@ -42,19 +42,21 @@ def calculate_stats(path, feature_index):
     mean = stats.mean(d.values())
     mx = max(d.values())
     hist_bins = []
+    hist_bins_str = []
     bn = 1
     while bn < mx:
         bn = bn * 10
-        hist_bins.append(bn)
+        hist_bins.append(bn + 1) # NP bins are non-inclusive on the right
+        hist_bins_str.append(str(bn + 1) + '-' + str(bn * 10))
     hist_bins = [0, 1, 2, 3] + hist_bins
+    hist_bins_str = ['0', '1', '2', '3-10'] + hist_bins_str
     hist = np.histogram(list(d.values()), hist_bins)[0]
-    hist_bins.remove(3)
     return {'mean': mean,
             'median': stats.median(d.values()),
             'max': mx,
             'stddev': stats.pstdev(d.values(), mean),
             'hist': hist,
-            'hist_bins': hist_bins
+            'hist_bins': hist_bins_str
             }
 
 def print_stats(datatype, mean, median, max, stddev, hist, hist_bins):
