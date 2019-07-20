@@ -25,7 +25,10 @@ NODES_PARENT_IDX = 1
 NODES_RANK_IDX = 2
 SEP = r'\s\|\s?'
 
-def extract_column_frequencies(path, column_indexes, init_with_first_column=False):
+INDEX = 'index'
+INIT_W_COL1 = 'init_with_first_column'
+
+def extract_column_frequencies(path, column_indexes):
     ret = {k: defaultdict(int) for k in column_indexes.keys()}
     with open(path) as f:
         last_col = -1
@@ -36,14 +39,12 @@ def extract_column_frequencies(path, column_indexes, init_with_first_column=Fals
             if last_col > col1:
                 raise ValueError('Found unsorted file {} at tax id {}'.format(path, col1))
             last_col = col1
-            if init_with_first_column:
-                for k in column_indexes.keys():
-                    ret[k][col1_str] # init to 0 if not already in dict
             for k in column_indexes.keys():
-                ret[k][l[column_indexes[k]].strip()] += 1
+                if column_indexes[k].get(INIT_W_COL1):
+                    ret[k][col1_str] # init to 0 if not already in dict
+                ret[k][l[column_indexes[k][INDEX]].strip()] += 1
     return {k: dict(ret[k]) for k in column_indexes.keys()}
 
-# returns mean, median, max, pop stddev
 def calculate_stats(vals):
     # crappy efficiency here but meh
     mean = stats.mean(vals)
@@ -87,17 +88,23 @@ def main():
     a = parseargs()
 
     names_per_taxa = extract_column_frequencies(
-        os.path.join(a.dir, NAMES_FILE), {'n': TAXID_IDX})['n']
+        os.path.join(a.dir, NAMES_FILE), {'n': {INDEX: TAXID_IDX}})['n']
     print_stats('Names per taxa', **calculate_stats(names_per_taxa.values()))
     del names_per_taxa
 
     nodes = os.path.join(a.dir, NODES_FILE)
-    nodes_data = extract_column_frequencies(nodes, {'c': NODES_PARENT_IDX}, True)
+    nodes_data = extract_column_frequencies(
+        nodes, {'c': {INDEX: NODES_PARENT_IDX, INIT_W_COL1: True}, 'r': {INDEX: NODES_RANK_IDX}})
     print_stats('Children per taxa', **calculate_stats(nodes_data['c'].values()))
 
-    # rank_freq = extract_column_frequencies(nodes, NODES_RANK_IDX, False)
-
-
+    rank_freq = nodes_data['r']
+    tt = texttable.Texttable()
+    tt.set_deco(0)
+    tt.add_row(['Rank', 'Node count'])
+    for r in sorted(rank_freq.items(), key=lambda kv: kv[1], reverse=True):
+        tt.add_row(r)
+    print(tt.draw())
+    print()
 
 if __name__ == '__main__':
     main()
