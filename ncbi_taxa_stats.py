@@ -22,23 +22,26 @@ NAMES_FILE = 'names.dmp'
 NODES_FILE = 'nodes.dmp'
 TAXID_IDX = 0
 NODES_PARENT_IDX = 1
+NODES_RANK_IDX = 2
 SEP = r'\s\|\s?'
 
-def extract_column_frequencies(path, column_index, init_with_first_column=False):
-    d = defaultdict(int)
+def extract_column_frequencies(path, column_indexes, init_with_first_column=False):
+    ret = {k: defaultdict(int) for k in column_indexes.keys()}
     with open(path) as f:
         last_col = -1
         for l in f:
             l = re.split(SEP, l)
             col1_str = l[0].strip()
             col1 = int(col1_str)
-            if init_with_first_column:
-                d[col1_str] # init to 0 if not already in dict
             if last_col > col1:
                 raise ValueError('Found unsorted file {} at tax id {}'.format(path, col1))
             last_col = col1
-            d[l[column_index].strip()] += 1
-    return dict(d)
+            if init_with_first_column:
+                for k in column_indexes.keys():
+                    ret[k][col1_str] # init to 0 if not already in dict
+            for k in column_indexes.keys():
+                ret[k][l[column_indexes[k]].strip()] += 1
+    return {k: dict(ret[k]) for k in column_indexes.keys()}
 
 # returns mean, median, max, pop stddev
 def calculate_stats(vals):
@@ -68,8 +71,8 @@ def print_stats(datatype, mean, median, max, stddev, hist, hist_bins):
     tt = texttable.Texttable()
     tt.set_deco(0)
     tt.add_row([datatype, 'Node count'])
-    for h, b in zip(hist, hist_bins):
-        tt.add_row([b, h])
+    for r in zip(hist_bins, hist):
+        tt.add_row(r)
     print(tt.draw())
     print()
 
@@ -83,13 +86,18 @@ def parseargs():
 def main():
     a = parseargs()
 
-    names_per_taxa = extract_column_frequencies(os.path.join(a.dir, NAMES_FILE), TAXID_IDX)
+    names_per_taxa = extract_column_frequencies(
+        os.path.join(a.dir, NAMES_FILE), {'n': TAXID_IDX})['n']
     print_stats('Names per taxa', **calculate_stats(names_per_taxa.values()))
     del names_per_taxa
 
-    children_per_taxa = extract_column_frequencies(
-        os.path.join(a.dir, NODES_FILE), NODES_PARENT_IDX, True)
-    print_stats('Children per taxa', **calculate_stats(children_per_taxa.values()))
+    nodes = os.path.join(a.dir, NODES_FILE)
+    nodes_data = extract_column_frequencies(nodes, {'c': NODES_PARENT_IDX}, True)
+    print_stats('Children per taxa', **calculate_stats(nodes_data['c'].values()))
+
+    # rank_freq = extract_column_frequencies(nodes, NODES_RANK_IDX, False)
+
+
 
 if __name__ == '__main__':
     main()
