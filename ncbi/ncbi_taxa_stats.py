@@ -80,7 +80,8 @@ def print_stats(datatype, mean, median, max, stddev, hist, hist_bins):
 
 def parseargs():
     parser = argparse.ArgumentParser(description='Calculate statistics on an NCBI taxonomy dump.')
-    parser.add_argument('--dir', required=True, help='the directory containing the dump file')
+    parser.add_argument('--dir', required=True,
+                        help='the directory containing the unzipped dump files')
 
     return parser.parse_args()
 
