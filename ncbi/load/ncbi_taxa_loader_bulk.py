@@ -70,6 +70,7 @@ def load_names(name_file):
 def canonicalize(string, ignore_tokens):
     # see https://docs.python.org/3/howto/unicode.html#comparing-strings
     normed = unicodedata.normalize('NFD', unicodedata.normalize('NFD', string).casefold())
+    # maybe include the full string, but normed, in the returned list?
     tokens = normed.split()
     # TODO TEST for fencepost errors here
     ret = []
