@@ -5,7 +5,7 @@
 # This script transforms an NCBI taxa dump into ArangoDB (ADB) JSON bulk load format.
 
 # It should only be used for an initial load into the DB; delta loads for subsequent tax dumps
-# should be handled by # the delta load script.
+# should be handled by the delta load script.
 
 # The script requires four inputs:
 # 1) The directory containing the unzipped taxa dump
