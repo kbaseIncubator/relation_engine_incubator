@@ -61,18 +61,17 @@ for node in get_nodes(nodes_source_file):
     save_node_in_db(node)
 
 for edge in get_edges(edges_source_file)
-    existing_edges = get_edges_from_db_in_version_order(edge.from, edge.to)
-    for ee in existing_edges:
-        if edge == ee:
-            add_version_to_edge_in_db(ee._from, ee._to, version)
-            continue
-    # new edge
-    from_node = get_node_from_db(edge.from, version)
-    to_node = get_node_from_db(edge.to, version)
-    edge._from = from_node._key
-    edge._to = to_node._key
-    edge.versions = [version]
-    save_edge_in_db(edge)
+    from_key = get_node_key_from_db(edge.from, version)
+    to_key = get_node_key_from_db(edge.to, version)
+
+    existing_edge = get_edge_from_db(from_key, to_key)
+    if not existing_edge or existing_edge != edge:
+        edge._from = from_key
+        edge._to = to_key
+        edge.versions = [version]
+        save_edge_in_db(edge)
+    else:
+        add_version_to_edge_in_db(existing_edge._from, existing_edge._to)
 
 push_version_to_version_collection(version) # adds to top of version list
 ```
