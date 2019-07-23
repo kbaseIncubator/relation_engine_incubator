@@ -43,9 +43,9 @@ user will select a version) can be retrieved for the purposes of querying the da
 ## Algorithm
 
 ### Inputs
-nodes_source_file = a file containing node data.
-edges_source_file = a file containing edge data.
-version = the version of the load.
+`nodes_source_file` = a file containing node data.  
+`edges_source_file` = a file containing edge data.  
+`version` = the version of the load.
 
 ### Algorithm
 ```
@@ -81,7 +81,7 @@ push_version_to_version_collection(version) # adds to top of version list
   does include any other fields defined on the node or edge as part of the graph schema.
 * `generate_key(...)` could have a number of different implementations:
   * Completely random, like a UUID
-  * node.id + '_' + version
+  * node.id + '\_' + version
   * node.id + a UUID per load
   * node.id + a user specified suffix per load
   * The only requirement is that it is guaranteed to be unique
