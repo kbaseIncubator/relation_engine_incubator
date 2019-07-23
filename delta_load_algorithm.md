@@ -92,6 +92,17 @@ push_version_to_version_collection(version) # adds to top of version list
   * The nodes must all be loaded prior to the edges to establish the `_key` field.
     * Unless you really want to make the algorithm complex.
 
-## TODO
+## Time traveling
 
-* Handle [time traveling](https://www.arangodb.com/2018/07/time-traveling-with-graph-databases/)
+https://www.arangodb.com/2018/07/time-traveling-with-graph-databases/
+
+Current issues with time traveling are:
+* It's not clear how to add the time ranges to the schema such that
+  * Nodes that are undeleted can be handled
+    * The versioning system just adds the new version to the version list
+  * They can be indexed and queries can take advantage of those indexes
+* It's not clear how to perform an update so that the DB is consistent during the update
+  * Versioning handles this by turning on the new version when all updates are complete by
+    adding the version to the version collection
+  * In time travelling it appears the altered nodes would be visible to queries as soon as they
+    are altered, which means the DB is in an inconsistent state while the update is going on
