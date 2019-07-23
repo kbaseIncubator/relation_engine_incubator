@@ -91,7 +91,6 @@ def process_nodes(
         nodes_in,
         name_table,
         node_collection,
-        id_suffix,
         load_version,
         nodes_out,
         edges_out
@@ -101,7 +100,7 @@ def process_nodes(
             record = re.split(SEP, line)
             # should really make the ints constants but meh
             id_, parent, rank, gencode = [record[i].strip() for i in [0,1,2,6]]
-            node_id = id_ + '_' + id_suffix
+            node_id = id_ + '_' + load_version
 
             aliases = []
             # May need to move names into separate nodes for canonical search purposes
@@ -135,7 +134,7 @@ def process_nodes(
                 edgef.write(json.dumps(
                     {'_from':       node_collection + '/' + node_id,
                      'from':        node_collection + '/' + id_,
-                     '_to':         node_collection + '/' + parent + '_' + id_suffix,
+                     '_to':         node_collection + '/' + parent + '_' + load_version,
                      'to':          node_collection + '/' + parent,
                      'versions':    [load_version]
                      }
@@ -150,11 +149,6 @@ def parse_args():
         '--node-collection',
         required=True,
         help='the name of the ArangoDB collection into which taxa nodes will be loaded')
-    parser.add_argument(
-        '--taxid-suffix',
-        required=True,
-        help='the suffix to append to the tax id in the ArangoDB _key, _from, and _to fields. ' +
-             'This suffix must not be reused in subsequent delta loads.')
     parser.add_argument(
         '--load-version',
         required=True,
@@ -172,7 +166,6 @@ def main():
         os.path.join(a.dir, NODES_IN_FILE),
         name_table,
         a.node_collection,
-        a.taxid_suffix,
         a.load_version,
         os.path.join(a.dir, NODES_OUT_FILE),
         os.path.join(a.dir, EDGES_OUT_FILE))

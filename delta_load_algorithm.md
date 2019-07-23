@@ -88,9 +88,13 @@ push_version_to_version_collection(version) # adds to top of version list
 
 ### Speed
 
-* To speed up the algorithm, the nodes and edges could be split into parts and parallelized.
-  * The nodes must all be loaded prior to the edges to establish the `_key` field.
-    * Unless you really want to make the algorithm complex.
+* To speed up the algorithm
+  * The nodes and edges could be split into parts and parallelized.
+    * The nodes must all be loaded prior to the edges to establish the `_key` field.
+      * Unless you really want to make the algorithm complex.
+  * The new taxonomy could be loaded into a temporary DB and then DB queries used to update
+    the real DB based on comparison to the temporary DB.
+    * In the case of ArangoDB, Foxx might be useful.
 
 ## Time traveling
 
