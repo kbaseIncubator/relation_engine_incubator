@@ -13,21 +13,15 @@
 #    (this is used to create the _from and _to fields in the edges)
 # 3) The version of the load - this is also expected to be unique between this base load and
 #    any delta loads.
+# 4) The time stamp for the load in unix epoch milliseconds - all nodes and edges will be marked
+#    with this timestamp as the creation date.
 
 # The script creates three JSON files for uploading into Arango:   
 #       ncbi_taxa_nodes.json    - the taxa vertexes
 #       ncbi_taxa_edges.json    - the taxa edges
-#       ncbi_taxa_versions.json - a single document that lists, in load order, the versions of
-#                                 taxa that have loaded into the DB. For a bulk load there will
-#                                 be only a single version. Delta loads will add versions to this
-#                                 document.
-
-# Note that versioning edges is not strictly necessary at this point since edges contain no
-# node-independent data, but the versioning mechanism is included in case this changes.
 
 # TODO TESTS
 # TODO quite a bit of this code can be shared with the delta loader
-# TODO time travelling
 
 import argparse
 import json
@@ -40,7 +34,6 @@ from pprint import pprint
 
 NODES_OUT_FILE = 'ncbi_taxa_nodes.json'
 EDGES_OUT_FILE = 'ncbi_taxa_edges.json'
-VERSIONS_OUT_FILE = 'ncbi_taxa_versions.json'
 
 NAMES_IN_FILE = 'names.dmp'
 NODES_IN_FILE = 'nodes.dmp'
@@ -51,6 +44,9 @@ CANONICAL_IGNORE_SET = {'et','al','and','or','the','a'}
 
 SEP = r'\s\|\s?'
 
+# see https://www.arangodb.com/2018/07/time-traveling-with-graph-databases/
+# in unix epoch ms this is 2255/6/5
+MAX_ADB_INTEGER = 2**53 - 1
 
 def load_names(name_file):
     # Could make this use less memory by parsing one nodes worth of entries at a time, since
@@ -90,6 +86,7 @@ def process_nodes(
         name_table,
         node_collection,
         load_version,
+        timestamp,
         nodes_out,
         edges_out
         ):
@@ -123,18 +120,22 @@ def process_nodes(
                  'aliases':                    aliases,
                  'ncbi_taxon_id':              int(id_),
                  'gencode':                    gencode,
-                 'versions':                   [load_version]
+                 'version_appeared':           load_version,
+                 'created':                    timestamp,
+                 'expires':                    MAX_ADB_INTEGER
                  }
                 ) + '\n')
             
             # edge
             if id_ != parent:  # no self edges
                 edgef.write(json.dumps(
-                    {'_from':       node_collection + '/' + node_id,
-                     'from':        node_collection + '/' + id_,
-                     '_to':         node_collection + '/' + parent + '_' + load_version,
-                     'to':          node_collection + '/' + parent,
-                     'versions':    [load_version]
+                    {'_from':            node_collection + '/' + node_id,
+                     'from':             node_collection + '/' + id_,
+                     '_to':              node_collection + '/' + parent + '_' + load_version,
+                     'to':               node_collection + '/' + parent,
+                     'version_appeared': load_version,
+                     'created':          timestamp,
+                     'expires':          MAX_ADB_INTEGER
                      }
                     ) + '\n')
 
@@ -150,8 +151,14 @@ def parse_args():
     parser.add_argument(
         '--load-version',
         required=True,
-        help='the version of this load. This version will be the only entry in the version list ' +
-             'for each node and edge, and in the versions document.')
+        help='the version of this load. This version will be added to a field in the nodes and ' +
+             'edges and will be used as part of the _key field for nodes.')
+    parser.add_argument(
+        '--load-timestamp',
+        type=int,
+        required=True,
+        help='the timestamp to be applied to the load, in unix epoch milliseconds. Any nodes ' +
+             'or edges created in this load will start to exist with this time stamp. ')
 
     return parser.parse_args()
 
@@ -165,11 +172,9 @@ def main():
         name_table,
         a.node_collection,
         a.load_version,
+        a.load_timestamp,
         os.path.join(a.dir, NODES_OUT_FILE),
         os.path.join(a.dir, EDGES_OUT_FILE))
-
-    with open(os.path.join(a.dir, VERSIONS_OUT_FILE), 'w') as f:
-        f.write(json.dumps({'versions': [a.load_version]}) + '\n')
 
 if __name__  == '__main__':
     main()
