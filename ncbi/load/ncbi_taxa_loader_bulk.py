@@ -7,13 +7,11 @@
 # It should only be used for an initial load into the DB; delta loads for subsequent tax dumps
 # should be handled by the delta load script.
 
-# The script requires four inputs:
+# The script requires three inputs:
 # 1) The directory containing the unzipped taxa dump
 # 2) The name of the ADB collection in which the taxa nodes will be loaded
 #    (this is used to create the _from and _to fields in the edges)
-# 3) A unique suffix to append to the taxid for use in the arango DB _key, _from, and _to fields.
-#    This suffix cannot be reused when loading delta loads into the same ADB collections.
-# 4) The version of the load - this is also expected to be unique between this base load and
+# 3) The version of the load - this is also expected to be unique between this base load and
 #    any delta loads.
 
 # The script creates three JSON files for uploading into Arango:   
