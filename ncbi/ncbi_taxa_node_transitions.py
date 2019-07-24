@@ -7,6 +7,7 @@
 import argparse
 import pathlib
 import re
+import texttable
 from collections import defaultdict
  
 ST_NO_EXIST = '∅'
@@ -77,8 +78,14 @@ def main():
                 transitions[laststate + ARROW + state] += 1
         last_nodestates = nodestates
     
+    s = sum(transitions.values())
+
+    tt = texttable.Texttable()
+    tt.set_deco(0)
+    tt.add_row(['Transition', 'Count', 'Percent'])
     for k, v in sorted(transitions.items(), key=lambda kv: kv[1], reverse=True):
-        print(f'{k} {v}')
+        tt.add_row([k, v, f'{(v / s) * 100:.2f}%'])
+    print(tt.draw())
 
 if __name__ == '__main__':
     main()
