@@ -15,7 +15,6 @@ ST_DELETE = 'D'
 ST_MERGED = 'M'
 ARROW = '→'
 
-
 NODES_IN_FILE = 'nodes.dmp'
 DEL_IN_FILE = 'delnodes.dmp'
 MERGED_IN_FILE = 'merged.dmp'
@@ -46,14 +45,10 @@ def load_nodestates(taxdir):
     return dict(ret)
 
 def get_state(nodeid, nodestates):
-    if nodeid in nodestates[NODES]:
-        return ST_EXIST
-    elif nodeid in nodestates[DELETED]:
-        return ST_DELETE
-    elif nodeid in nodestates[MERGED]:
-        return ST_MERGED
-    else:
-        return ST_NO_EXIST
+    for key, state in KEY_TO_STATE.items():
+        if nodeid in nodestates[key]:
+            return state
+    return ST_NO_EXIST
 
 def parseargs():
     parser = argparse.ArgumentParser(
