@@ -135,7 +135,8 @@ def process_nodes(
                      'to':               node_collection + '/' + parent,
                      'version_appeared': load_version,
                      'created':          timestamp,
-                     'expires':          MAX_ADB_INTEGER
+                     'expires':          MAX_ADB_INTEGER,
+                     'type':             'std'                 # as opposed to merge
                      }
                     ) + '\n')
 
