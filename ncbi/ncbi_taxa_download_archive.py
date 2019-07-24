@@ -1,5 +1,8 @@
 #!/usr/bin/env python
 
+# Downloads all the NCBI tax dumps from the ftp site. Does not download the new_taxdump* archives.
+# use -h for help.
+
 NCBI_HOST = 'ftp.ncbi.nih.gov'
 NCBI_TAX_DIR = '/pub/taxonomy/taxdump_archive/'
 TAXDUMP_PREFIX = 'taxdmp_'
