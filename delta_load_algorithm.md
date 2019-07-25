@@ -69,7 +69,8 @@ etc., originate there.
 * `id` defines the ID of the node. This is usually the ID of the node from the external data
   source (e.g. a taxid for NCBI taxonomy). This ID is not guaranteed to be unique within the graph,
   but is unique for a particular version of the graph.
-* `version` is a string that denotes in which version the node first appeared.
+* `first_version` is a string that denotes in which version the node first appeared.
+* `last_version` is a string that denotes in which version the node last appeared.
 * `created` denotes the date, in unix epoch milliseconds, when the node began to exist.
 * `expired`  denotes the date, in unix epoch milliseconds, when the node ceased to exist.
 
@@ -78,7 +79,8 @@ etc., originate there.
 * `_to` uniquely defines the node where the edge terminates. It contains a `_key` value.
 * `from` contains the node `id` from which the edge originates.
 * `to` contains the node `id` where the edge terminates.
-* `version` is a string that denotes in which version the node first appeared.
+* `first_version` is a string that denotes in which version the edge first appeared.
+* `last_version` is a string that denotes in which version the edge last appeared.
 * `created` denotes the date, in unix epoch milliseconds, when the edge began to exist.
 * `expired`  denotes the date, in unix epoch milliseconds, when the edge ceased to exist.
 * `type` denotes the type of the edge - either `std` for an edge which is part of the taxonomy or
@@ -93,11 +95,11 @@ etc., originate there.
 
 |Input|Description|
 |-----|-----------|
-|`nodes_source_file`|a file containing node data|
-|`edges_source_file`|a file containing edge data|
-|`merge_source_fild`|a file containg merged nodes data|
+|`nodes_source`|a source of node data|
+|`edges_source`|a source of edge data|
+|`merge_source`|a source of merged nodes data|
 |`timestamp`|the timestamp (as the unix epoch in milliseconds) to use as the created date for the new nodes and edges. `timestamp` - 1 will be used for the expired date for deleted or merged nodes and edges.|
-|`version`|the version of the load. This is applied to nodes and edges for informational purposes, and used to create unique `_key`s from node IDs.|
+|`version`|the version of the load. This is applied to nodes and edge and used to create unique `_key`s from node IDs.|
                       
 
 ### Algorithm
@@ -112,7 +114,8 @@ def delete_node(nodekey):
       
 def create_node(node):
     node._key = generate_key(...)
-    node.version = version
+    node.first_version = version
+    node.last_version = version
     node.created = timestamp
     node.expired = ∞
     save_node_in_db(node)
@@ -122,15 +125,14 @@ def create_edge(merged_node, merged_into_node, edge)
     edge._to: merged_into_node._key
     edge.from: merged_node.id
     edge.to: merged_into_node.id
-    edge.version: version
+    edge.first_version: version
+    edge.last_version: version
     edge.created: timestamp
     edge.expired: ∞
     save_edge_in_db(edge)
 
 def main():
-    extant_nodes = set()              # if there are many nodes this may need to be stored in a db
-    for node in get_nodes(nodes_source_file):
-        extant_nodes.add(node.id)
+    for node in get_nodes(nodes_source):
         existing = get_node_from_db(node.id, timestamp)
         if not existing:
             create_node(node)
@@ -141,11 +143,15 @@ def main():
             # to be a transaction to make the db stable during the load.
             delete_node(existing._key)
             create_node(node)
+        else:
+            set_last_node_version_in_db(node._key, version) # mark node as extant in current load
 
-    # for merges, we only consider merges that occurred in the current release - e.g if either
+    # For merges, we only consider merges that occurred in the current release - e.g if either
     # node doesn't exist, we ignore the merge. It starts getting complicated otherwise.
+    # It is assumed the set of nodes from get_nodes() and the set of nodes from get_merges() are
+    # disjoint.
     if merge_source_file:
-        for merged_id, merged_into_id in get_merges(merge_source_file):
+        for merged_id, merged_into_id in get_merges(merge_source):
             merged = get_node_from_db(merged_id, timestamp)
             merged_into = get_node_from_db(merged_into_id, timestamp)
             if merged and merged_into:
@@ -156,12 +162,12 @@ def main():
                 create_edge(merged, merged_into, {type: merge})
         
     # since not all sources of graphs possess delete info, we figure it out ourselves
-    for node in find_extant_nodes_in_db(timestamp):
-        if node.id not in extant_nodes:
-            delete_node(node._key)
+    # may be possible to do this in one query
+    for node in find_extant_nodes_without_last_version_in_db(timestamp, version):
+        delete_node(node._key)
       
 
-    for edge in get_edges(edges_source_file)
+    for edge in get_edges(edges_source)
         from = get_node_from_db(edge.from, timestamp)
         to = get_node_from_db(edge.to, timestamp)
 
@@ -172,11 +178,19 @@ def main():
         elif existing != edge:
             set_edge_expiration_in_db(existing._from, existing._to, timestamp - 1)
             create_edge(from, to, edge)
+        else:
+            set_last_edge_version_in_db(node._key, version) # mark edge as extant in current load
     
-    # Node deletetion should have handled any edges that need to be deleted
-    # For safety, could go through every edge in the graph and check if it's in the set of
-    # edges in this load, and delete otherwise
+    # If a node's edges are changed but the node is otherwise unchanged, the old edges will not
+    # be deleted, so we need to delete any edges that aren't in the current version but still
+    # exist
+    # May be possible to do this in one query
+    for edge in find_extant_edges_without_last_version_in_db(timestamp, version):
+        set_edge_expiration_in_db(existing._from, existing._to, timestamp - 1)
 ```
+
+TODO: indexes
+TODO: update batch loader
 
 ### Notes
 * Node and edge equality does not include the `_key`, `_to`, `_from`, `created`, `expired`, and
