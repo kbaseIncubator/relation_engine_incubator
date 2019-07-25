@@ -69,9 +69,19 @@ def main():
     dirs = sorted([d for d in p.iterdir() if d.is_dir()])
     transitions = defaultdict(int)
     # last here means last iteration, not last in list
-    last_nodestates = load_nodestates(p / dirs.pop(0))
+    last_dir = dirs.pop(0)
+    last_nodestates = load_nodestates(p / last_dir)
+    sizes = {last_dir: {'n': len(last_nodestates[NODES]),
+                        'd': len(last_nodestates[DELETED]),
+                        'm': len(last_nodestates[MERGED])
+                        }
+             }
     for d in dirs:
         nodestates = load_nodestates(p / d)
+        sizes[d] = {'n': len(nodestates[NODES]),
+                    'd': len(nodestates[DELETED]),
+                    'm': len(nodestates[MERGED])
+                    }
         for key, state in KEY_TO_STATE.items():
             for nodeid in nodestates[key]:
                 laststate = get_state(nodeid, last_nodestates)
@@ -85,6 +95,14 @@ def main():
     tt.add_row(['Transition', 'Count', 'Percent'])
     for k, v in sorted(transitions.items(), key=lambda kv: kv[1], reverse=True):
         tt.add_row([k, v, f'{(v / s) * 100:.2f}%'])
+    print(tt.draw())
+    print()
+
+    tt = texttable.Texttable()
+    tt.set_deco(0)
+    tt.add_row(['Tax dump', 'Nodes', 'Deleted', 'Merged'])
+    for k in sorted(sizes.keys()):
+        tt.add_row([k, sizes[k]['n'], sizes[k]['d'], sizes[k]['m']])
     print(tt.draw())
 
 if __name__ == '__main__':
