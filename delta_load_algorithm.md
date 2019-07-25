@@ -57,7 +57,7 @@ etc., originate there.
   * Taking deleted nodes into account becomes complex
     * Nodes can transition from merged -> deleted or vice versa
     * Need to check for merge edges in previously deleted nodes
-    * What if a node is merged, unmerged, and merged again
+    * What if a node is merged, deleted, and merged again
       * Do we add merged edges for both cases? How do we know when the merge actually occurred
         without reconstructing the entire graph history every load?
   * If tax dumps are skipped, merging become even more complex
@@ -83,7 +83,7 @@ etc., originate there.
 * `expired`  denotes the date, in unix epoch milliseconds, when the edge ceased to exist.
 * `type` denotes the type of the edge - either `std` for an edge which is part of the taxonomy or
   ontology (e.g the graph proper) or `merge` for an edge that denotes that the `from` node has been
-  merged into the `to` node (and therefore the `from` node **must** be in a deleted state).
+  merged into the `to` node (and therefore the `from` node **must** be expired).
 * In ArangoDB, the `?from` and `?to` fields are prefixed by the name of the collection in which the
   node resides.
 
@@ -135,6 +135,10 @@ def main():
         if not existing:
             create_node(node)
         elif existing != node:
+            # for continous data you'd need the deletion of the node & edges and creation
+            # of the new node and edges to be a transaction.
+            # Since this is a batch load we don't worry about it. The whole load would have
+            # to be a transaction to make the db stable during the load.
             delete_node(existing._key)
             create_node(node)
 
@@ -147,7 +151,7 @@ def main():
             if merged and merged_into:
                 # don't need to check whether the edge exists because the algorithm will never
                 # leave a node undeleted with an outgoing merge edge. If both nodes exist,
-                # there's no prexisting edge.
+                # there's no preexisting edge.
                 delete_node(merged._key)
                 create_edge(merged, merged_into, {type: merge})
         
@@ -157,17 +161,21 @@ def main():
             delete_node(node._key)
       
 
-for edge in get_edges(edges_source_file)
-    from = get_node_from_db(edge.from, timestamp)
-    to = get_node_from_db(edge.to, timestamp)
+    for edge in get_edges(edges_source_file)
+        from = get_node_from_db(edge.from, timestamp)
+        to = get_node_from_db(edge.to, timestamp)
 
-    existing = get_edge_from_db(from_key, to_key)
-    edge.type = std
-    if not existing:
-        create_edge(from, to, edge)
-    elif existing != edge:
-        set_edge_expiration_in_db(edge._from, edge._to, timestamp - 1)
-        create_edge(from, to, edge)
+        existing = get_edge_from_db(from_key, to_key)
+        edge.type = std
+        if not existing:
+            create_edge(from, to, edge)
+        elif existing != edge:
+            set_edge_expiration_in_db(existing._from, existing._to, timestamp - 1)
+            create_edge(from, to, edge)
+    
+    # Node deletetion should have handled any edges that need to be deleted
+    # For safety, could go through every edge in the graph and check if it's in the set of
+    # edges in this load, and delete otherwise
 ```
 
 ### Notes
