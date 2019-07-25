@@ -152,7 +152,7 @@ def main():
     # node doesn't exist, we ignore the merge. It starts getting complicated otherwise.
     # It is assumed the set of nodes from get_nodes() and the set of nodes from get_merges() are
     # disjoint.
-    if merge_source_file:
+    if merge_source:
         for merged_id, merged_into_id in get_merges(merge_source):
             merged = get_node_from_db(merged_id, timestamp)
             merged_into = get_node_from_db(merged_into_id, timestamp)
