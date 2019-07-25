@@ -190,11 +190,10 @@ def main():
 ```
 
 TODO: indexes
-TODO: update batch loader
 
 ### Notes
 * Node and edge equality does not include the `_key`, `_to`, `_from`, `created`, `expired`, and
-  `version` fields, but does include any other fields defined on the node or edge as part of the 
+  `*_version` fields, but does include any other fields defined on the node or edge as part of the 
   graph schema.
 * `generate_key(...)` could have a number of different implementations:
   * Completely random, like a UUID

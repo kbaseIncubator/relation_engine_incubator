@@ -120,7 +120,8 @@ def process_nodes(
                  'aliases':                    aliases,
                  'ncbi_taxon_id':              int(id_),
                  'gencode':                    gencode,
-                 'version_appeared':           load_version,
+                 'first_version':              load_version,
+                 'last_version':               load_version,
                  'created':                    timestamp,
                  'expires':                    MAX_ADB_INTEGER
                  }
@@ -133,7 +134,8 @@ def process_nodes(
                      'from':             node_collection + '/' + id_,
                      '_to':              node_collection + '/' + parent + '_' + load_version,
                      'to':               node_collection + '/' + parent,
-                     'version_appeared': load_version,
+                     'first_version':    load_version,
+                     'last_version':     load_version,
                      'created':          timestamp,
                      'expires':          MAX_ADB_INTEGER,
                      'type':             'std'                 # as opposed to merge
