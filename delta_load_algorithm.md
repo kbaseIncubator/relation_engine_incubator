@@ -10,6 +10,8 @@ etc., originate there.
 ## Assumptions
 
 * Only one instance of the loader runs at once. Unspecified behavior may result otherwise.
+* There is only one extant node per external ID (e.g. per NCBI Taxonomy ID) at any one time.
+* There is only one extant edge between any two extant nodes at any one time.
 
 ## Issues
 
@@ -171,7 +173,8 @@ def main():
         from = get_node_from_db(edge.from, timestamp)
         to = get_node_from_db(edge.to, timestamp)
 
-        existing = get_edge_from_db(from_key, to_key)
+        # assumes there is only one extant edge from one node to another
+        existing = get_edge_from_db(from._key, to._key, timestamp)
         edge.type = std
         if not existing:
             create_edge(from, to, edge)
@@ -179,7 +182,8 @@ def main():
             set_edge_expiration_in_db(existing._from, existing._to, timestamp - 1)
             create_edge(from, to, edge)
         else:
-            set_last_edge_version_in_db(node._key, version) # mark edge as extant in current load
+            # mark edge as extant in current load
+            set_last_edge_version_in_db(existing._from, existing._to, timestamp, version)
     
     # If a node's edges are changed but the node is otherwise unchanged, the old edges will not
     # be deleted, so we need to delete any edges that aren't in the current version but still
@@ -188,8 +192,6 @@ def main():
     for edge in find_extant_edges_without_last_version_in_db(timestamp, version):
         set_edge_expiration_in_db(existing._from, existing._to, timestamp - 1)
 ```
-
-TODO: indexes
 
 ### Notes
 * Node and edge equality does not include the `_key`, `_to`, `_from`, `created`, `expired`, and
@@ -202,6 +204,38 @@ TODO: indexes
   * node.id + a user specified suffix per load
   * The only requirement is that it is guaranteed to be unique
   * As of 2019-7-23 node.id + '\_' + version was chosen
+
+### Indexes:
+
+The following indexes are needed for decent performance of the delta loader & node / edge finding
+and traversal queries. Multiple fields separated by a comma indicate a compound index.
+
+Note that unique doesn't suggest that the index should be made unique in the database, as that
+can prevent sharding.
+
+#### Nodes:
+
+|Index|Purpose|Unique?|
+|-----|-------|-------|
+|_key|default|Yes|
+|id, created, expired|find nodes via an external ID and a timestamp. Used to locate prior node when updating a node.|Yes|
+|created, expired, last_version|find extant nodes with or without a particular load version. Used to expire extant nodes not in the current load.|No|
+
+#### Edges
+|Index|Purpose|Unique?|
+|-----|-------|-------|
+|_from|default|No|
+|_to|default|No|
+|_from, _to, created, expired|find an edge exactly without having to travese all of a node's edges.|Yes*|
+|created, expired, last_version|find extant edges with or without a particular load version. Used to expire extant edges not in the current load.|No|
+|_from, created, expired|traverse downstream from a node given a timestamp.|No|
+|_to, created, expired|traverse upstream from a node given a timestamp.|No|
+
+* Merge edges should never co-exist with extant standard edges.
+
+May also want indexes on `to` and `from` but they are not necessary for the delta loader or
+traversals.
+
 
 ### Speed
 
