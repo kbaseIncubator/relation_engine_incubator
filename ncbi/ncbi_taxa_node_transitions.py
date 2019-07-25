@@ -5,6 +5,7 @@
 # Use -h for help.
 
 import argparse
+import hashlib
 import pathlib
 import re
 import texttable
@@ -23,6 +24,7 @@ MERGED_IN_FILE = 'merged.dmp'
 NODES = 'nodes'
 DELETED = 'deleted'
 MERGED = 'merged'
+LINE_MD5S = 'MD5S'
 
 SEP = r'\s\|\s?'
 
@@ -38,12 +40,15 @@ KEY_TO_STATE = {NODES: ST_EXIST,
 
 def load_nodestates(taxdir):
     ret = defaultdict(set)
+    md5s = dict()
     for key, f in KEY_TO_FILE.items():
         with open(taxdir / f) as taxfile:
             for l in taxfile:
                 id_ = re.split(SEP, l)[0].strip()
                 ret[key].add(id_)
-    return dict(ret)
+                if key == NODES:
+                    md5s[id_] = hashlib.md5(l.encode('UTF-8')).hexdigest()
+    return dict(ret), md5s
 
 def get_state(nodeid, nodestates):
     for key, state in KEY_TO_STATE.items():
@@ -70,14 +75,19 @@ def main():
     transitions = defaultdict(int)
     # last here means last iteration, not last in list
     last_dir = dirs.pop(0)
-    last_nodestates = load_nodestates(p / last_dir)
+    last_nodestates, last_md5s = load_nodestates(p / last_dir)
     sizes = {last_dir: {'n': len(last_nodestates[NODES]),
                         'd': len(last_nodestates[DELETED]),
                         'm': len(last_nodestates[MERGED])
                         }
              }
+    mismatches = {}
     for d in dirs:
-        nodestates = load_nodestates(p / d)
+        nodestates, md5s = load_nodestates(p / d)
+        mismatches[d] = 0
+        for id_ in md5s.keys():
+            if id_ in last_md5s and last_md5s[id_] != md5s[id_]:
+                mismatches[d] += 1
         sizes[d] = {'n': len(nodestates[NODES]),
                     'd': len(nodestates[DELETED]),
                     'm': len(nodestates[MERGED])
@@ -87,6 +97,7 @@ def main():
                 laststate = get_state(nodeid, last_nodestates)
                 transitions[laststate + ARROW + state] += 1
         last_nodestates = nodestates
+        last_md5s = md5s
     
     s = sum(transitions.values())
 
@@ -103,6 +114,14 @@ def main():
     tt.add_row(['Tax dump', 'Nodes', 'Deleted', 'Merged'])
     for k in sorted(sizes.keys()):
         tt.add_row([k, sizes[k]['n'], sizes[k]['d'], sizes[k]['m']])
+    print(tt.draw())
+    print()
+
+    tt = texttable.Texttable()
+    tt.set_deco(0)
+    tt.add_row(['Tax dump', 'Node changes'])
+    for k in sorted(mismatches.keys()):
+        tt.add_row([k, mismatches[k]])
     print(tt.draw())
 
 if __name__ == '__main__':
