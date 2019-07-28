@@ -17,29 +17,7 @@ etc., originate there.
 
 * With the algorithm described, any queries that are performed while a load is in progress
   are not repeatable as the database is in an inconsistent state.
-  * A potential fix is using a red-green scheme during the update process, although this adds
-    significant complexity to the update process:
-    * Create new nodes and edges collections (red).
-    * Blacklist the new collections from any queries.
-    * Copy the current collections (green) into the red collections.
-    * Perform the update on the red collections.
-    * Updating edges from external collections can proceed in one of two ways:
-      * Halting
-        * Halt updates to external collections
-        * Copy all current edges to the new collection
-        * Resume updates when the red -> green switch occurs (below)
-      * Dual update
-        * Add new edges to both the green and red collections
-        * This runs the risk of leaving the db in an inconsistent state if an update fails
-          for one collection but not the other
-          * Need to consider how to restart the update from a case like this
-          * Which collection gets the update first?
-        * Stop adding updates to the green collection after the red -> green switch
-    * When updates are complete, blacklist the green collections and remove the blacklist for
-      the red collections
-      * Ideally atomically - in ElasticSearch this is possible with aliases, for example
-    * Delete the green collections
-    * Change the red collection to green
+  * See delta_load_atomicity.md for potential solutions.
 
 ## Limitations
 
