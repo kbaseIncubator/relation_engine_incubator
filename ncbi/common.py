@@ -96,7 +96,7 @@ class NCBINodeProvider:
                     'rank':                       rank,
                     'aliases':                    aliases,
                     'ncbi_taxon_id':              int(id_),
-                    'gencode':                    gencode,
+                    'gencode':                    int(gencode),
                     }
             
             yield node
