@@ -8,9 +8,9 @@
 * Perform the update on the red collections.
 * Updating edges from external collections can proceed in one of two ways:
     * Halting
-    * Halt updates to external collections
-    * Copy all current edges to the new collection
-    * Resume updates when the red -> green switch occurs (below)
+      * Halt updates to external collections
+      * Copy all current edges to the new collection
+      * Resume updates when the red -> green switch occurs (below)
     * Dual update
     * Add new edges to both the green and red collections
     * This runs the risk of leaving the db in an inconsistent state if an update fails
@@ -68,6 +68,8 @@ This adds significant complexity to the update process.
 ### Indexes
 
 * Any index that includes the expired field must now be duplicated for both expire fields.
+* Indexes are required on both expired fields to find nodes with a -∞ expiration time when
+  removing an incomplete update.
 
 ### Muliple data sets
 
@@ -75,7 +77,7 @@ The procedure above has drawbacks when queries may span multiple batch loaded da
 expiration fields:
 
 * Each data set must have its own active expiration field, and the data sets may have different
-  expiration field names based on the number of updates that have been performed.
+  active fields based on the number of updates that have been performed.
 * If a query spans a data set implicitly, it is impossible to inform the query which expiration
   field to use in that data set.
 
