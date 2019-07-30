@@ -82,4 +82,22 @@ def test_save_vertex(arango_db):
                    'last_version': 'load-ver1',
                    'science': 'yes indeed!'}
 
+def test_set_last_version_on_vertex(arango_db):
+    col_name = 'verts'
+    arango_db.create_collection(col_name)
+    att = ArangoBatchTimeTravellingDB(arango_db, default_vertex_collection=col_name)
+
+    key = att.save_vertex('myid', 'load-ver1', 500, {'science': 'yes!'})
+
+    att.set_last_version_on_vertex(key, 'load-ver42')
+
+    ret = att.get_vertex('myid', 600)
+    assert ret == {'_key': 'myid_load-ver1',
+                   'created': 500,
+                   'expired': 9007199254740991,
+                   'first_version': 'load-ver1',
+                   'id': 'myid',
+                   'last_version': 'load-ver42',
+                   'science': 'yes!'}
+
 

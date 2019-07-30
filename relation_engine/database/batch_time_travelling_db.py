@@ -91,6 +91,8 @@ class ArangoBatchTimeTravellingDB:
         version - the version of the load as part of which the vertex is being created.
         timestamp - the time at which the node should begin to exist in Unix epoch milliseconds.
         data - the node contents as a dict.
+
+        Returns the key for the vertex.
         """
 
         col = self._get_vertex_collection(vertex_collection)
@@ -105,6 +107,15 @@ class ArangoBatchTimeTravellingDB:
         data[_FLD_EXPIRED] = _MAX_ADB_INTEGER
 
         col.insert(data, silent=True)
+        return data[_FLD_KEY]
+
+    def set_last_version_on_vertex(self, key, last_version, vertex_collection=None):
+        update = {_FLD_KEY: key, _FLD_VER_LST: last_version}
+
+        col = self._get_vertex_collection(vertex_collection)
+
+        col.update(update, silent=True)
+
 
     # mutates in place!
     def _clean(self, obj):
