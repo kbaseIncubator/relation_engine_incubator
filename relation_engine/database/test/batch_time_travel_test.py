@@ -49,7 +49,8 @@ def test_get_vertex(arango_db):
 
     assert ret == {'_key': '1', 'id': 'foo', 'created': 100, 'expires': 600}
 
-    assert att.get_vertex('bar', 50) == None
+    assert att.get_vertex('bar', 99) == None
+    assert att.get_vertex('bar', 401) == None
 
 
 
