@@ -1,32 +1,52 @@
 # Graph delta batch load atomicity
 
-## Option 1: Red / Green collections:
+## Rollbacks
 
-* Create new nodes and edges collections (red).
-* Blacklist the new collections from any queries.
-* Copy the current collections (green) into the red collections.
-* Perform the update on the red collections.
-* Updating edges from external collections can proceed in one of two ways:
-    * Halting
-      * Halt updates to external collections
-      * Copy all current edges to the new collection
-      * Resume updates when the red -> green switch occurs (below)
-    * Dual update
-    * Add new edges to both the green and red collections
-    * This runs the risk of leaving the db in an inconsistent state if an update fails
-        for one collection but not the other
-        * Need to consider how to restart the update from a case like this
-        * Which collection gets the update first?
-    * Stop adding updates to the green collection after the red -> green switch
-* When updates are complete, blacklist the green collections and remove the blacklist for
-    the red collections
-    * Ideally atomically - in ElasticSearch this is possible with aliases, for example
-* Delete the green collections
-* Change the red collection to green
+Note that some of these options do not specifically enable roll backs, but an update can be rolled
+back (unatomically) by:
 
-This adds significant complexity to the update process.
+* Setting any expirations dates equal to `timestamp - 1` to ∞.
+* Deleting any nodes or edges where the `created` field equals `timestamp`, including merge edges.
+* Setting `last_version` to the prior load version on any nodes or edges where `last_version`
+  equals the load version.
 
-## Option 2: Red / Green expire fields
+If the `timestamp` is in the future at the time the rollback completes, it's as if the update never
+happened. If not, then any queries between the `timestamp` and the completion of the rollback may
+be spurious.
+
+## Option 1: Reject queries
+
+* While an upgrade is in progress reject RE queries.
+  * This is reasonable if updates are quick and can be done at times of low load.
+  * This may cause apps to fail or views to not render.
+  * Note that only queries after `timestamp - 1` need to be rejected while the update is in
+    progress.
+
+## Option 2: Queue queries
+
+* While an upgrade is in progress queue RE queries until the update is complete.
+  * This is reasonable if updates are quick.
+  * This may cause apps or views to wait.
+  * Note that only queries after `timestamp - 1` need to be queued while the update is in
+    progress.
+
+## Option 3: Far future timestamp and faith
+
+* When starting the update, set the `timestamp` to > expected_update_time * 4.
+* The update proceeds as normal.
+* If the update fails, system administrators have until `timestamp` to rollback the upgrade. If
+  they are unsuccessful, queries after `timestamp` may be spurious.
+  * The system could be brought down prior to `timestamp` if necessary.
+
+## Option 4: Restricted timestamps
+* While the update is in progress:
+  * Any query with a timestamp &lt; `timestamp - 2` proceeds normally.
+  * Any other query's behavior depends on an input parameter `strict_timestamp`:
+    * If `false`, the input timestamp is substituted by `timestamp - 2` by the RE API.
+      This timestamp is returned in the query as the timestamp that was used.
+    * If `true` an error is thrown.
+
+## Option 5: Red / Green expire fields
 
 * Nodes and edges now have two expiration fields, one of which is active and one of which is
   inactive at any given time.
@@ -98,3 +118,29 @@ tightly coupled loads:
   * If such is not the case, all updates must be removed and restarted.
 * The active expiration field can then be switched, and all updates are now active.
 * Syncing for all updated collections proceeds as normal.
+
+## Option 6: Red / Green collections:
+
+* Create new nodes and edges collections (red).
+* Blacklist the new collections from any queries.
+* Copy the current collections (green) into the red collections.
+* Perform the update on the red collections.
+* Updating edges from external collections can proceed in one of two ways:
+    * Halting
+      * Halt updates to external collections
+      * Copy all current edges to the new collection
+      * Resume updates when the red -> green switch occurs (below)
+    * Dual update
+    * Add new edges to both the green and red collections
+    * This runs the risk of leaving the db in an inconsistent state if an update fails
+        for one collection but not the other
+        * Need to consider how to restart the update from a case like this
+        * Which collection gets the update first?
+    * Stop adding updates to the green collection after the red -> green switch
+* When updates are complete, blacklist the green collections and remove the blacklist for
+    the red collections
+    * Ideally atomically - in ElasticSearch this is possible with aliases, for example
+* Delete the green collections
+* Change the red collection to green
+
+This adds significant complexity to the update process.
