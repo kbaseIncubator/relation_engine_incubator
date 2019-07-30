@@ -49,7 +49,7 @@ class ArangoBatchTimeTravellingDB:
           f"""
           FOR v IN {col.name}
               FILTER v.id == @id
-              FILTER v.created < @timestamp && v.expires > @timestamp
+              FILTER v.created <= @timestamp && v.expires >= @timestamp
               RETURN v
           """,
           bind_vars={'id': id_, 'timestamp': timestamp},

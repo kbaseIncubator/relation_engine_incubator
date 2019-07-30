@@ -37,13 +37,19 @@ def test_get_vertex(arango_db):
                      ])
 
     att = ArangoBatchTimeTravellingDB(arango_db, default_vertex_collection=col_name)
-    ret = att.get_vertex('bar', 250)
+    ret = att.get_vertex('bar', 201)
+
+    assert ret == {'_key': '3', 'id': 'bar', 'created': 201, 'expires': 300}
+
+    ret = att.get_vertex('bar', 300)
 
     assert ret == {'_key': '3', 'id': 'bar', 'created': 201, 'expires': 300}
 
     ret = att.get_vertex('foo', 250)
 
     assert ret == {'_key': '1', 'id': 'foo', 'created': 100, 'expires': 600}
+
+    assert att.get_vertex('bar', 50) == None
 
 
 
