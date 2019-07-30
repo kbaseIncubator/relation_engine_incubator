@@ -44,7 +44,7 @@ class ArangoBatchTimeTravellingDB:
         vertex_collection - the collection name to query. If none is provided, the default will
           be used.
         """
-        col = self._get_vertex_collection(vertex_collection)
+        col_name = self._get_vertex_collection(vertex_collection).name
         cur = self._database.aql.execute(
           f"""
           FOR v IN @@col
@@ -52,12 +52,12 @@ class ArangoBatchTimeTravellingDB:
               FILTER v.created <= @timestamp && v.expires >= @timestamp
               RETURN v
           """,
-          bind_vars={'id': id_, 'timestamp': timestamp, '@col': col.name},
+          bind_vars={'id': id_, 'timestamp': timestamp, '@col': col_name},
           count=True
         )
         if cur.count() > 1:
             raise ValueError(f'db contains > 1 vertex for id {id_}, timestamp {timestamp}, ' +
-                             'collection {col.name}')
+                             f'collection {col_name}')
         
         try:
             v = self._clean(cur.pop())

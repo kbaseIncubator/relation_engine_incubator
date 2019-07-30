@@ -52,6 +52,13 @@ def test_get_vertex(arango_db):
     assert att.get_vertex('bar', 99) == None
     assert att.get_vertex('bar', 401) == None
 
+    col.insert({'_key': '5', 'id': 'bar', 'created': 150, 'expires': 250})
+
+    try:
+        att.get_vertex('bar', 200)
+    except ValueError as e:
+        assert e.args[0] == 'db contains > 1 vertex for id bar, timestamp 200, collection verts'
+
 
 
 
