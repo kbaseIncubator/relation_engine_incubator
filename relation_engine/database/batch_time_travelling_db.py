@@ -47,12 +47,12 @@ class ArangoBatchTimeTravellingDB:
         col = self._get_vertex_collection(vertex_collection)
         cur = self._database.aql.execute(
           f"""
-          FOR v IN {col.name}
+          FOR v IN @@col
               FILTER v.id == @id
               FILTER v.created <= @timestamp && v.expires >= @timestamp
               RETURN v
           """,
-          bind_vars={'id': id_, 'timestamp': timestamp},
+          bind_vars={'id': id_, 'timestamp': timestamp, '@col': col.name},
           count=True
         )
         if cur.count() > 1:
