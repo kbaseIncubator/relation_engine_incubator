@@ -7,6 +7,9 @@ graph database already containing one or more previous versions of the data.
 KBase indends to use ArangoDB for graph queries and so many of the conventions for field names,
 etc., originate there.
 
+The algorithm is based on
+[ArangoDB time travelling](https://www.arangodb.com/2018/07/time-traveling-with-graph-databases/).
+
 ## Assumptions
 
 * Only one instance of the loader runs at once. Unspecified behavior may result otherwise.

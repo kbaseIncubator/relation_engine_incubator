@@ -1,6 +1,6 @@
 # Graph delta batch load atomicity
 
-## Red / Green collections:
+## Option 1: Red / Green collections:
 
 * Create new nodes and edges collections (red).
 * Blacklist the new collections from any queries.
@@ -26,7 +26,7 @@
 
 This adds significant complexity to the update process.
 
-## Red / Green expire fields
+## Option 2: Red / Green expire fields
 
 * Nodes and edges now have two expiration fields, one of which is active and one of which is
   inactive at any given time.
