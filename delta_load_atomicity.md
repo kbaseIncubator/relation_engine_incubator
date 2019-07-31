@@ -21,6 +21,7 @@ be spurious.
   * This may cause apps to fail or views to not render.
   * Note that only queries after `timestamp - 1` need to be rejected while the update is in
     progress.
+  * Include a useful error message explaining that the DB is unavailable temporarily.
 
 ## Option 2: Queue queries
 
@@ -140,6 +141,8 @@ tightly coupled loads:
 * When updates are complete, blacklist the green collections and remove the blacklist for
     the red collections
     * Ideally atomically - in ElasticSearch this is possible with aliases, for example
+      * In Arango there doesn't seem to be an easy way to do this - no collection aliasing or
+        renaming
 * Delete the green collections
 * Change the red collection to green
 
