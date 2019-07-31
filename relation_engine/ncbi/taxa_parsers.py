@@ -95,6 +95,7 @@ class NCBIEdgeProvider:
                 continue  # no self edges
             
             edge = {
+                'id': id_ + '_' + parent,
                 'from': id_,
                 'to': parent
             }
