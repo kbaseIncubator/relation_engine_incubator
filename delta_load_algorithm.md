@@ -14,7 +14,6 @@ The algorithm is based on
 
 * Only one instance of the loader runs at once. Unspecified behavior may result otherwise.
 * There is only one extant node per external ID (e.g. per NCBI Taxonomy ID) at any one time.
-* There is only one extant edge between any two extant nodes at any one time.
 
 ## Issues
 
@@ -58,6 +57,10 @@ The algorithm is based on
 * `expired`  denotes the date, in unix epoch milliseconds, when the node ceased to exist.
 
 ### Edges
+* `_key` defineds the unique ID of the edge.
+* `id` defines the ID of the edge. This is usually the ID of the edge from the external data, or an
+  ID generated from the data. This ID uniquely identifies the ege in a particular load. An
+  ID and a timestamp or a load version uniquely identifies the edge in all loads.
 * `_from` uniquely defines the node from which the edge originates. It contains a `_key` value.
 * `_to` uniquely defines the node where the edge terminates. It contains a `_key` value.
 * `from` contains the node `id` from which the edge originates.
@@ -69,6 +72,8 @@ The algorithm is based on
 * `type` denotes the type of the edge - either `std` for an edge which is part of the taxonomy or
   ontology (e.g the graph proper) or `merge` for an edge that denotes that the `from` node has been
   merged into the `to` node (and therefore the `from` node **must** be expired).
+  * Rather than a `type` field, edge types may be implemented as separate collections, depending
+    on the use case.
 * In ArangoDB, the `?from` and `?to` fields are prefixed by the name of the collection in which the
   node resides.
 
@@ -151,27 +156,26 @@ def main():
       
 
     for edge in get_edges(edges_source)
-        from = get_node_from_db(edge.from, timestamp)
-        to = get_node_from_db(edge.to, timestamp)
-
-        # assumes there is only one extant edge from one node to another
-        existing = get_edge_from_db(from._key, to._key, timestamp)
+        existing = get_edge_from_db(edge.id, timestamp)
         edge.type = std
-        if not existing:
-            create_edge(from, to, edge)
-        elif existing != edge:
-            set_edge_expiration_in_db(existing._from, existing._to, timestamp - 1)
-            create_edge(from, to, edge)
+        if existing:
+            from = get_node_from_db(edge.from, timestamp)
+            to = get_node_from_db(edge.to, timestamp)
+            if existing != edge or existing._from != from._key or existing._to != to._key:
+                set_edge_expiration_in_db(existing._key, timestamp - 1)
+                create_edge(from, to, edge)
+            else:
+                # mark edge as extant in current load
+                set_last_edge_version_in_db(existing._key, timestamp, version)
         else:
-            # mark edge as extant in current load
-            set_last_edge_version_in_db(existing._from, existing._to, timestamp, version)
+            create_edge(from, to, edge)
     
     # If a node's edges are changed but the node is otherwise unchanged, the old edges will not
     # be deleted, so we need to delete any edges that aren't in the current version but still
     # exist
     # May be possible to do this in one query
     for edge in find_extant_edges_without_last_version_in_db(timestamp, version):
-        set_edge_expiration_in_db(existing._from, existing._to, timestamp - 1)
+        set_edge_expiration_in_db(edge._key, timestamp - 1)
 ```
 
 ### Notes
@@ -199,20 +203,20 @@ can prevent sharding.
 |Index|Purpose|Unique?|
 |-----|-------|-------|
 |_key|default|Yes|
-|id, created, expired|find nodes via an external ID and a timestamp. Used to locate prior node when updating a node.|Yes|
+|id, created, expired|find nodes via an external ID and a timestamp. Used to locate the prior node when updating a node.|Yes|
 |created, expired, last_version|find extant nodes with or without a particular load version. Used to expire extant nodes not in the current load.|No|
 
 #### Edges
 |Index|Purpose|Unique?|
 |-----|-------|-------|
+|_key|default|Yes|
 |_from|default|No|
 |_to|default|No|
-|_from, _to, created, expired|find an edge exactly without having to travese all of a node's edges.|Yes*|
+|id, created, expired|find edges via an exernal ID and a timestamp. Used to locate the prior node when updating a node.|Yes|
 |created, expired, last_version|find extant edges with or without a particular load version. Used to expire extant edges not in the current load.|No|
 |_from, created, expired|traverse downstream from a node given a timestamp.|No|
 |_to, created, expired|traverse upstream from a node given a timestamp.|No|
 
-* Merge edges should never co-exist with extant standard edges.
 
 May also want indexes on `to` and `from` but they are not necessary for the delta loader or
 traversals.
