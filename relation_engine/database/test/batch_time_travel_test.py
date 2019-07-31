@@ -25,6 +25,10 @@ def arango_db():
     sys.delete_database(DB_NAME)
 
 def test_get_vertex(arango_db):
+    """
+    Tests that getting a vertex returns the correct vertex. In particular checks for OB1 errors.
+    """
+
     col_name = 'verts'
     col = arango_db.create_collection(col_name)
 
@@ -57,6 +61,10 @@ def test_get_vertex(arango_db):
         assert e.args[0] == 'db contains > 1 vertex for id bar, timestamp 200, collection verts'
 
 def test_save_vertex(arango_db):
+    """
+    Tests saving a vertex and retrieving the new vertex.
+    """
+
     col_name = 'verts'
     arango_db.create_collection(col_name)
     att = ArangoBatchTimeTravellingDB(arango_db, default_vertex_collection=col_name)
@@ -83,6 +91,11 @@ def test_save_vertex(arango_db):
                    'science': 'yes indeed!'}
 
 def test_set_last_version_on_vertex(arango_db):
+    """
+    Tests setting the `last_version` field on a vertex, and specifically that the correct
+    vertex is modified.
+    """
+
     col_name = 'verts'
     arango_db.create_collection(col_name)
     att = ArangoBatchTimeTravellingDB(arango_db, default_vertex_collection=col_name)
@@ -155,6 +168,14 @@ def _setup_set_node_expired(arango_db):
     return edges1, edges2
 
 def test_set_node_expired_single_vertex(arango_db):
+    """
+    Tests that given a network of nodes and edges where the edges are in 2 collections and the
+    nodes are in a single collection, expiring a single vertex without providing any edge
+    collections to modify updates only that vertex. No other vertices or edges should be modified.
+
+    See _setup_set_node_expired for the test setup.
+    """
+
     edges1, edges2 = _setup_set_node_expired(arango_db)
     att = ArangoBatchTimeTravellingDB(arango_db, default_vertex_collection='verts')
 
@@ -171,6 +192,15 @@ def test_set_node_expired_single_vertex(arango_db):
     _check_docs(arango_db, edges2, 'edges2')
 
 def test_set_node_expired_vert_and_edges_one_collection(arango_db):
+    """
+    Tests that given a network of nodes and edges where the edges are in 2 collections and the
+    nodes are in a single collection, expiring a single vertex where only one of the edge
+    collections is specified to recieve updates results in the correct changes. Only the
+    specfied vertex and the edges connected to that vertex in the specified edge collection should
+    be modified.
+
+    See _setup_set_node_expired for the test setup.
+    """
 
     _, edges2 = _setup_set_node_expired(arango_db)
     att = ArangoBatchTimeTravellingDB(arango_db, default_vertex_collection='verts')
@@ -198,6 +228,15 @@ def test_set_node_expired_vert_and_edges_one_collection(arango_db):
     _check_docs(arango_db, edges2, 'edges2')
 
 def test_set_node_expired_vert_and_edges_two_collections(arango_db):
+    """
+    Tests that given a network of nodes and edges where the edges are in 2 collections and the
+    nodes are in a single collection, expiring a single vertex where both of the edge
+    collections are specified to recieve updates results in the correct changes. Only the
+    specfied vertex and the edges connected to that vertex in any edge collection should
+    be modified.
+
+    See _setup_set_node_expired for the test setup.
+    """
 
     _setup_set_node_expired(arango_db)
     att = ArangoBatchTimeTravellingDB(arango_db, default_vertex_collection='verts')
