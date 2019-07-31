@@ -32,8 +32,8 @@ from collections import defaultdict
 from pprint import pprint
 
 # probably want to namespace this behind biokbase
-from relation_engine.ncbi.common import NCBINodeProvider
-from relation_engine.ncbi.common import NCBIEdgeProvider
+from relation_engine.ncbi.taxa_parsers import NCBINodeProvider
+from relation_engine.ncbi.taxa_parsers import NCBIEdgeProvider
 
 NODES_OUT_FILE = 'ncbi_taxa_nodes.json'
 EDGES_OUT_FILE = 'ncbi_taxa_edges.json'
