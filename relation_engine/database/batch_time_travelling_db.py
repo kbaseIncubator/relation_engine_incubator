@@ -8,6 +8,8 @@ more classes and methods can be added as needed.
 
 """
 
+# TODO add a method to verify a collection is an edge collection. _from and _to are silently dropped if not.
+
 from arango.exceptions import CursorEmptyError as _CursorEmptyError
 
 _INTERNAL_ARANGO_FIELDS = ['_rev']
@@ -217,9 +219,9 @@ class ArangoBatchTimeTravellingDB:
         """
         Sets the expiration time on a vertex and adjacent edges in the given collections.
 
-        key - the node key.
+        key - the vertex key.
         expiration_time - the time, in Unix epoch milliseconds, to set as the expiration time
-          on the node and any affected edges.
+          on the vertex and any affected edges.
         edge_collections - a list of names of collections that will be checked for connected
           edges.
         vertex_collection - the collection name to query. If none is provided, the default will
@@ -245,6 +247,20 @@ class ArangoBatchTimeTravellingDB:
                        'timestamp': expiration_time
                        },
             )
+        col.update({_FLD_KEY: key, _FLD_EXPIRED: expiration_time}, silent=True)
+
+    def expire_edge(self, key, expiration_time, edge_collection=None):
+        """
+        Sets the expiration time on an edge in the given collections.
+
+        key - the edge key.
+        expiration_time - the time, in Unix epoch milliseconds, to set as the expiration time
+          on the edge.
+        edge_collection - the collection name to query. If none is provided, the default will
+          be used.
+
+        """
+        col = self._get_edge_collection(edge_collection)
         col.update({_FLD_KEY: key, _FLD_EXPIRED: expiration_time}, silent=True)
 
     # mutates in place!
