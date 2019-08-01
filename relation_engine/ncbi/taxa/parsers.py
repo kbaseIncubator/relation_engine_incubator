@@ -95,7 +95,7 @@ class NCBIEdgeProvider:
                 continue  # no self edges
             
             edge = {
-                'id': id_ + '_' + parent,
+                'id': id_, # since there's 1 edge / child the child id uniquely IDs the edge
                 'from': id_,
                 'to': parent
             }

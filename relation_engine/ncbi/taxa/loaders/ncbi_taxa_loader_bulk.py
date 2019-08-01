@@ -26,10 +26,10 @@ import argparse
 import os
 import unicodedata
 
-from relation_engine.load_utils import process_nodes
-from relation_engine.load_utils import process_edges
-from relation_engine.ncbi.taxa_parsers import NCBINodeProvider
-from relation_engine.ncbi.taxa_parsers import NCBIEdgeProvider
+from relation_engine.batchload.load_utils import process_nodes
+from relation_engine.batchload.load_utils import process_edges
+from relation_engine.ncbi.taxa.parsers import NCBINodeProvider
+from relation_engine.ncbi.taxa.parsers import NCBIEdgeProvider
 
 NODES_OUT_FILE = 'ncbi_taxa_nodes.json'
 EDGES_OUT_FILE = 'ncbi_taxa_edges.json'
