@@ -203,8 +203,8 @@ can prevent sharding.
 |Index|Purpose|Unique?|
 |-----|-------|-------|
 |_key|default|Yes|
-|id, created, expired|find nodes via an external ID and a timestamp. Used to locate the prior node when updating a node.|Yes|
-|created, expired, last_version|find extant nodes with or without a particular load version. Used to expire extant nodes not in the current load.|No|
+|id, expired, created|find nodes via an external ID and a timestamp. Used to locate the prior node when updating a node.|Yes|
+|expired, created, last_version|find extant nodes with or without a particular load version. Used to expire extant nodes not in the current load.|No|
 
 #### Edges
 |Index|Purpose|Unique?|
@@ -212,11 +212,13 @@ can prevent sharding.
 |_key|default|Yes|
 |_from|default|No|
 |_to|default|No|
-|id, created, expired|find edges via an exernal ID and a timestamp. Used to locate the prior node when updating a node.|Yes|
-|created, expired, last_version|find extant edges with or without a particular load version. Used to expire extant edges not in the current load.|No|
-|_from, created, expired|traverse downstream from a node given a timestamp.|No|
-|_to, created, expired|traverse upstream from a node given a timestamp.|No|
+|id, expired, created|find edges via an exernal ID and a timestamp. Used to locate the prior node when updating a node.|Yes|
+|expired, created, last_version|find extant edges with or without a particular load version. Used to expire extant edges not in the current load.|No|
+|_from, expired, created|traverse downstream from a node given a timestamp.|No|
+|_to, expired, created|traverse upstream from a node given a timestamp.|No|
 
+The `expired` field is always before the `created` field in indexes as the most common use case
+will be excluding non-extant, or expired, nodes.
 
 May also want indexes on `to` and `from` but they are not necessary for the delta loader or
 traversals.
