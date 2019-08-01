@@ -8,8 +8,6 @@ more classes and methods can be added as needed.
 
 """
 
-# TODO add a method to verify a collection is an edge collection. _from and _to are silently dropped if not.
-
 from arango.exceptions import CursorEmptyError as _CursorEmptyError
 
 _INTERNAL_ARANGO_FIELDS = ['_rev']
@@ -50,8 +48,27 @@ class ArangoBatchTimeTravellingDB:
           This can be overridden.
         """
         self._database = database
-        self._default_vertex_collection = default_vertex_collection
-        self._default_edge_collection = default_edge_collection
+        # for some reason I don't understand these collections count as False
+        self._has_vert_col = False
+        self._has_edge_col = False
+        if default_vertex_collection:
+            self._default_vertex_collection = self._database.collection(default_vertex_collection)
+            self._has_vert_col = True
+        else:
+            self._default_vertex_collection = None
+    
+        if default_edge_collection:
+            self._default_edge_collection = self._ensure_edge_col(default_edge_collection)
+            self._has_edge_col = True
+        else:
+            self._default_edge_collection = None
+
+    # if an edge is inserted into a non-edge collection _from and _to are silently dropped
+    def _ensure_edge_col(self, collection):
+        c = self._database.collection(collection)
+        if not c.properties()['edge']:
+            raise ValueError(f'{collection} is not an edge collection')
+        return c
 
     def get_vertex(self, id_, timestamp, vertex_collection=None):
         """
@@ -273,14 +290,14 @@ class ArangoBatchTimeTravellingDB:
         # TODO handle no such collection
         if collection:
             return self._database.collection(collection)
-        if not self._default_vertex_collection:
+        if not self._has_vert_col:
             raise ValueError("No collection provided and no default specified")
-        return self._database.collection(self._default_vertex_collection)
+        return self._default_vertex_collection
 
     def _get_edge_collection(self, collection):
         # TODO handle no such collection
         if collection:
-            return self._database.collection(collection)
-        if not self._default_edge_collection:
+            return self._ensure_edge_col(collection)
+        if not self._has_edge_col:
             raise ValueError("No collection provided and no default specified")
-        return self._database.collection(self._default_edge_collection)
+        return self._default_edge_collection

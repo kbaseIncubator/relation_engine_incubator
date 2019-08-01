@@ -24,6 +24,24 @@ def arango_db():
 
     sys.delete_database(DB_NAME)
 
+def test_init_fail_bad_edge_collection(arango_db):
+    col_name = 'edge'
+    arango_db.create_collection(col_name)
+
+    try:
+        ArangoBatchTimeTravellingDB(arango_db, default_edge_collection=col_name)
+    except ValueError as e:
+        assert e.args[0] == 'edge is not an edge collection'
+
+def test_expire_edge_bad_edge_collection(arango_db):
+    col_name = 'edge'
+    arango_db.create_collection(col_name)
+
+    try:
+        ArangoBatchTimeTravellingDB(arango_db).expire_edge('k', 3, 'edge')
+    except ValueError as e:
+        assert e.args[0] == 'edge is not an edge collection'
+
 def test_get_vertex(arango_db):
     """
     Tests that getting a vertex returns the correct vertex. In particular checks for OB1 errors.
