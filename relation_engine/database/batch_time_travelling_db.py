@@ -48,34 +48,52 @@ class ArangoBatchTimeTravellingDB:
         """
         Get a vertex from a collection that exists at the given timestamp.
 
-        A node ID and a timestamp uniquely identifies a node in a collection.
+        A vertex ID and a timestamp uniquely identifies a vertex in a collection.
 
         id_ - the ID of the vertex.
-        timestamp - the time at which the node must exist in Unix epoch milliseconds.
+        timestamp - the time at which the vertex must exist in Unix epoch milliseconds.
         vertex_collection - the collection name to query. If none is provided, the default will
           be used.
         """
         col_name = self._get_vertex_collection(vertex_collection).name
+        return self._get_document(id_, timestamp, col_name)
+
+    def _get_document(self, id_, timestamp, collection_name):
         cur = self._database.aql.execute(
           f"""
-          FOR v IN @@col
-              FILTER v.{_FLD_ID} == @id
-              FILTER v.{_FLD_CREATED} <= @timestamp && v.{_FLD_EXPIRED} >= @timestamp
-              RETURN v
+          FOR d IN @@col
+              FILTER d.{_FLD_ID} == @id
+              FILTER d.{_FLD_CREATED} <= @timestamp && d.{_FLD_EXPIRED} >= @timestamp
+              RETURN d
           """,
-          bind_vars={'id': id_, 'timestamp': timestamp, '@col': col_name},
+          bind_vars={'id': id_, 'timestamp': timestamp, '@col': collection_name},
           count=True
         )
         if cur.count() > 1:
-            raise ValueError(f'db contains > 1 vertex for id {id_}, timestamp {timestamp}, ' +
-                             f'collection {col_name}')
+            raise ValueError(f'db contains > 1 document for id {id_}, timestamp {timestamp}, ' +
+                             f'collection {collection_name}')
         
         try:
-            v = self._clean(cur.pop())
+            d = self._clean(cur.pop())
         except CursorEmptyError as _:
-            v = None
+            d = None
         cur.close()
-        return v
+        return d
+
+    def get_edge(self, id_, timestamp, edge_collection=None):
+        """
+        Get an edge from a collection that exists at the given timestamp.
+
+        An edge ID and a timestamp uniquely identifies an edge in a collection.
+
+        id_ - the ID of the edge.
+        timestamp - the time at which the vertex must exist in Unix epoch milliseconds.
+        edge_collection - the collection name to query. If none is provided, the default will
+          be used.
+        """
+        col_name = self._get_edge_collection(edge_collection).name
+        return self._get_document(id_, timestamp, col_name)
+
 
     def save_vertex(self, id_, version, created_time, data, vertex_collection=None):
         """

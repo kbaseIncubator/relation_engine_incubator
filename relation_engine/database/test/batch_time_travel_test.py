@@ -58,7 +58,51 @@ def test_get_vertex(arango_db):
     try:
         att.get_vertex('bar', 200)
     except ValueError as e:
-        assert e.args[0] == 'db contains > 1 vertex for id bar, timestamp 200, collection verts'
+        assert e.args[0] == 'db contains > 1 document for id bar, timestamp 200, collection verts'
+
+def test_get_edge(arango_db):
+    """
+    Tests that getting a edge returns the correct edge. In particular checks for OB1 errors.
+    """
+
+    col_name = 'edges'
+    col = arango_db.create_collection(col_name, edge=True)
+
+    # it's assumed that given an id and a timestamp there's <= 1 match in the collection
+    col.import_bulk([{'_key': '1', '_from': 'fake/1', '_to': 'fake/2', 'id': 'foo',
+                      'created': 100, 'expired': 600},
+                     {'_key': '2', '_from': 'fake/1', '_to': 'fake/2', 'id': 'bar',
+                      'created': 100, 'expired': 200},
+                     {'_key': '3', '_from': 'fake/1', '_to': 'fake/2', 'id': 'bar',
+                      'created': 201, 'expired': 300}, # target
+                     {'_key': '4', '_from': 'fake/1', '_to': 'fake/2', 'id': 'bar',
+                      'created': 301, 'expired': 400},
+                     ])
+
+    att = ArangoBatchTimeTravellingDB(arango_db, default_edge_collection=col_name)
+
+    ret = att.get_edge('bar', 201)
+    assert ret == {'_key': '3', '_from': 'fake/1', '_to': 'fake/2', 'id': 'bar',
+                   'created': 201, 'expired': 300}
+
+    ret = att.get_edge('bar', 300)
+    assert ret == {'_key': '3', '_from': 'fake/1', '_to': 'fake/2', 'id': 'bar',
+                   'created': 201, 'expired': 300}
+
+    ret = att.get_edge('foo', 250)
+    assert ret == {'_key': '1', '_from': 'fake/1', '_to': 'fake/2', 'id': 'foo',
+                   'created': 100, 'expired': 600}
+
+    assert att.get_edge('bar', 99) == None
+    assert att.get_edge('bar', 401) == None
+
+    col.insert({'_key': '5', '_from': 'fake/1', '_to': 'fake/2', 'id': 'bar',
+                'created': 150, 'expired': 250})
+
+    try:
+        att.get_edge('bar', 200)
+    except ValueError as e:
+        assert e.args[0] == 'db contains > 1 document for id bar, timestamp 200, collection edges'
 
 def test_save_vertex(arango_db):
     """
