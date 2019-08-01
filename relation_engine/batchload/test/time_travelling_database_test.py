@@ -4,7 +4,7 @@
 
 # TODO more tests
 
-from relation_engine.database.batch_time_travelling_db import ArangoBatchTimeTravellingDB
+from relation_engine.batchload.time_travelling_database import ArangoBatchTimeTravellingDB
 from arango import ArangoClient
 from pytest import fixture
 
