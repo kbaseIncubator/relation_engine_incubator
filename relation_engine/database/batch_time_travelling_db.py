@@ -8,12 +8,19 @@ more classes and methods can be added as needed.
 
 """
 
-from arango.exceptions import CursorEmptyError
+from arango.exceptions import CursorEmptyError as _CursorEmptyError
 
-_INTERNAL_ARANGO_FIELDS = ['_id', '_rev']
+_INTERNAL_ARANGO_FIELDS = ['_rev']
 
 _FLD_KEY = '_key'
+_FLD_FULL_ID = '_id'
 _FLD_ID = 'id'
+
+_FLD_FROM = '_from'
+_FLD_FROM_ID = 'from'
+_FLD_TO = '_to'
+_FLD_TO_ID = 'to'
+
 _FLD_VER_LST = 'last_version'
 _FLD_VER_FST = 'first_version'
 _FLD_CREATED = 'created'
@@ -75,7 +82,7 @@ class ArangoBatchTimeTravellingDB:
         
         try:
             d = self._clean(cur.pop())
-        except CursorEmptyError as _:
+        except _CursorEmptyError as _:
             d = None
         cur.close()
         return d
@@ -103,14 +110,15 @@ class ArangoBatchTimeTravellingDB:
         embedded data structures may have unexpected results.
 
         The _key field is generated from the id_ and version fields, which are expected to uniquely
-        identify a node.
+        identify a vertex.
 
-        id_ - the external ID of the node.
+        id_ - the external ID of the vertex.
         version - the version of the load as part of which the vertex is being created.
-        created_time - the time at which the node should begin to exist in Unix epoch milliseconds.
-        data - the node contents as a dict.
-        vertex_collection - the collection name to query. If none is provided, the default will
-          be used.
+        created_time - the time at which the vertex should begin to exist in Unix epoch
+          milliseconds.
+        data - the vertex contents as a dict.
+        vertex_collection - the name of the collection to modify. If none is provided, the default
+          will be used.
 
         Returns the key for the vertex.
         """
@@ -121,6 +129,56 @@ class ArangoBatchTimeTravellingDB:
         data = dict(data) # make a copy and overwrite the old data variable
         data[_FLD_KEY] = id_ + '_' + version
         data[_FLD_ID] = id_
+        data[_FLD_VER_FST] = version
+        data[_FLD_VER_LST] = version
+        data[_FLD_CREATED] = created_time
+        data[_FLD_EXPIRED] = _MAX_ADB_INTEGER
+
+        col.insert(data, silent=True)
+        return data[_FLD_KEY]
+
+    def save_edge(
+            self,
+            id_,
+            from_vertex,
+            to_vertex,
+            version,
+            created_time,
+            data=None,
+            edge_collection=None):
+        """
+        Save an edge in the database.
+
+        Note that only a shallow copy of the data is made before adding database fields. Modifying
+        embedded data structures may have unexpected results.
+
+        The _key field is generated from the id_ and version fields, which are expected to uniquely
+        identify an edge.
+
+        id_ - the external ID of the edge.
+        from_vertex - the vertex where the edge originates. This vertex must have been fetched from
+          the database.
+        to_vertex - the vertex where the edge terminates. This vertex must have been fetched from
+          the database.
+        version - the version of the load as part of which the edge is being created.
+        created_time - the time at which the edge should begin to exist in Unix epoch milliseconds.
+        data - the edge contents as a dict.
+        edge_collection - the name of the collection to modify. If none is provided, the default
+          will be used.
+
+        Returns the key for the edge.
+        """
+        col = self._get_edge_collection(edge_collection)
+        data = {} if not data else data
+
+        # May want a bulk method
+        data = dict(data) # make a copy and overwrite the old data variable
+        data[_FLD_KEY] = id_ + '_' + version
+        data[_FLD_ID] = id_
+        data[_FLD_FROM] = from_vertex[_FLD_FULL_ID]
+        data[_FLD_FROM_ID] = from_vertex[_FLD_ID]
+        data[_FLD_TO] = to_vertex[_FLD_FULL_ID]
+        data[_FLD_TO_ID] = to_vertex[_FLD_ID]
         data[_FLD_VER_FST] = version
         data[_FLD_VER_LST] = version
         data[_FLD_CREATED] = created_time
@@ -155,7 +213,7 @@ class ArangoBatchTimeTravellingDB:
           be used.
 
         """
-        edge_collections = [] if edge_collections is None else edge_collections
+        edge_collections = [] if not edge_collections else edge_collections
         col = self._get_vertex_collection(vertex_collection)
         # filter out nulls or empty strings and fail early on missing collections
         edge_names = [self._get_edge_collection(e).name for e in edge_collections if e]
