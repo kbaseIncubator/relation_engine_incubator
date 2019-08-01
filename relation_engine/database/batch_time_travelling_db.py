@@ -200,6 +200,19 @@ class ArangoBatchTimeTravellingDB:
 
         col.update({_FLD_KEY: key, _FLD_VER_LST: last_version}, silent=True)
 
+    def set_last_version_on_edge(self, key, last_version, edge_collection=None):
+        """
+        Set the last version field on a edge.
+
+        key - the key of the edge.
+        last_version - the version to set.
+        edge_collection - the collection name to query. If none is provided, the default will
+          be used.
+        """
+        col = self._get_edge_collection(edge_collection)
+
+        col.update({_FLD_KEY: key, _FLD_VER_LST: last_version}, silent=True)
+
     def expire_vertex(self, key, expiration_time, edge_collections=None, vertex_collection=None):
         """
         Sets the expiration time on a vertex and adjacent edges in the given collections.

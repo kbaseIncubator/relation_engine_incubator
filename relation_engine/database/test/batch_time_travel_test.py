@@ -113,8 +113,10 @@ def test_save_vertex(arango_db):
     arango_db.create_collection(col_name)
     att = ArangoBatchTimeTravellingDB(arango_db, default_vertex_collection=col_name)
 
-    att.save_vertex('myid', 'load-ver1', 500, {'science': 'yes!'})
-    att.save_vertex('myid2', 'load-ver1', 600, {'science': 'yes indeed!'})
+    k = att.save_vertex('myid', 'load-ver1', 500, {'science': 'yes!'})
+    assert k == 'myid_load-ver1'
+    k = att.save_vertex('myid2', 'load-ver1', 600, {'science': 'yes indeed!'})
+    assert k == 'myid2_load-ver1'
 
     ret = att.get_vertex('myid', 600)
     assert ret == {'_key': 'myid_load-ver1',
@@ -146,19 +148,21 @@ def test_save_edge(arango_db):
     arango_db.create_collection(col_name, edge=True)
     att = ArangoBatchTimeTravellingDB(arango_db, default_edge_collection=col_name)
 
-    att.save_edge(
+    k = att.save_edge(
         'myid',
         {'id': 'whee', '_id': 'fake/1'},
         {'id': 'whoo', '_id': 'fake/2'},
         'load-ver1',
         500)
-    att.save_edge(
+    assert k == 'myid_load-ver1'
+    k = att.save_edge(
         'myid2',
         {'id': 'whee', '_id': 'fake/1'},
         {'id': 'whoo', '_id': 'fake/2'},
         'load-ver1',
         600,
         {'science': 'yes indeed!'})
+    assert k == 'myid2_load-ver1'
 
     ret = att.get_edge('myid', 600)
     assert ret == {'_key': 'myid_load-ver1',
@@ -221,6 +225,59 @@ def test_set_last_version_on_vertex(arango_db):
                    'id': 'myid1',
                    'last_version': 'load-ver1',
                    'science': 'yes!'}
+
+def test_set_last_version_on_edge(arango_db):
+    """
+    Tests setting the `last_version` field on an edge, and specifically that the correct
+    edge is modified.
+    """
+
+    col_name = 'edges'
+    arango_db.create_collection(col_name, edge=True)
+    att = ArangoBatchTimeTravellingDB(arango_db, default_edge_collection=col_name)
+
+    key = att.save_edge(
+        'myid',
+        {'id': 'whee', '_id': 'fake/1'},
+        {'id': 'whoo', '_id': 'fake/2'},
+        'load-ver1',
+        500)
+    _ = att.save_edge(
+        'myid2',
+        {'id': 'whee', '_id': 'fake/1'},
+        {'id': 'whoo', '_id': 'fake/2'},
+        'load-ver1',
+        600,
+        {'science': 'yes indeed!'})
+
+    att.set_last_version_on_edge(key, 'load-ver42')
+
+    ret = att.get_edge('myid', 600)
+    assert ret == {'_key': 'myid_load-ver1',
+                   '_id': 'edges/myid_load-ver1',
+                   '_from': 'fake/1',
+                   '_to': 'fake/2',
+                   'from': 'whee',
+                   'to': 'whoo',
+                   'created': 500,
+                   'expired': 9007199254740991,
+                   'first_version': 'load-ver1',
+                   'id': 'myid',
+                   'last_version': 'load-ver42'}
+    
+    ret = att.get_edge('myid2', 600)
+    assert ret == {'_key': 'myid2_load-ver1',
+                   '_id': 'edges/myid2_load-ver1',
+                   '_from': 'fake/1',
+                   '_to': 'fake/2',
+                   'from': 'whee',
+                   'to': 'whoo',
+                   'created': 600,
+                   'expired': 9007199254740991,
+                   'first_version': 'load-ver1',
+                   'id': 'myid2',
+                   'last_version': 'load-ver1',
+                   'science': 'yes indeed!'}
 
 def _setup_set_node_expired(arango_db):
 
