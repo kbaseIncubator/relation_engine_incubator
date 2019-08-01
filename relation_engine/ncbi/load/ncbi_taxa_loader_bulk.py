@@ -23,68 +23,19 @@
 # TODO TESTS
 
 import argparse
-import json
 import os
-import re
-import sys
 import unicodedata
-from collections import defaultdict
-from pprint import pprint
 
-# probably want to namespace this behind biokbase
-from relation_engine.ncbi.common import NCBINodeProvider
-from relation_engine.ncbi.common import NCBIEdgeProvider
+from relation_engine.load_utils import process_nodes
+from relation_engine.load_utils import process_edges
+from relation_engine.ncbi.taxa_parsers import NCBINodeProvider
+from relation_engine.ncbi.taxa_parsers import NCBIEdgeProvider
 
 NODES_OUT_FILE = 'ncbi_taxa_nodes.json'
 EDGES_OUT_FILE = 'ncbi_taxa_edges.json'
 
 NAMES_IN_FILE = 'names.dmp'
 NODES_IN_FILE = 'nodes.dmp'
-
-# see https://www.arangodb.com/2018/07/time-traveling-with-graph-databases/
-# in unix epoch ms this is 2255/6/5
-MAX_ADB_INTEGER = 2**53 - 1
-
-def process_nodes(
-        nodes_in,
-        names_in,
-        load_version,
-        timestamp,
-        nodes_out):
-    with open(nodes_in) as infile, open(names_in) as namesfile, open(nodes_out, 'w') as nodef:
-        nodeprov = NCBINodeProvider(namesfile, infile)
-        for n in nodeprov:
-            n.update({
-                '_key':           n['id'] + '_' + load_version,
-                'first_version':  load_version,
-                'last_version':   load_version,
-                'created':        timestamp,
-                'expires':        MAX_ADB_INTEGER
-                })
-            nodef.write(json.dumps(n) + '\n')
-
-def process_edges(
-        nodes_in,
-        node_collection,
-        load_version,
-        timestamp,
-        edges_out,
-        ):
-    with open(nodes_in) as infile, open(edges_out, 'w') as edgef:
-        edgeprov = NCBIEdgeProvider(infile)
-        for e in edgeprov:
-            e.update({
-                '_from':            node_collection + '/' + e['from'] + '_' + load_version,
-                'from':             node_collection + '/' + e['from'],
-                '_to':              node_collection + '/' + e['to'] + '_' + load_version,
-                'to':               node_collection + '/' + e['to'],
-                'first_version':    load_version,
-                'last_version':     load_version,
-                'created':          timestamp,
-                'expires':          MAX_ADB_INTEGER,
-                'type':             'std'                 # as opposed to merge
-            })
-            edgef.write(json.dumps(e) + '\n')
 
 def parse_args():
     parser = argparse.ArgumentParser(
@@ -111,20 +62,19 @@ def parse_args():
 
 def main():
     a = parse_args()
+    nodes = os.path.join(a.dir, NODES_IN_FILE)
+    names = os.path.join(a.dir, NAMES_IN_FILE)
 
-    process_nodes(
-        os.path.join(a.dir, NODES_IN_FILE),
-        os.path.join(a.dir, NAMES_IN_FILE),
-        a.load_version,
-        a.load_timestamp,
-        os.path.join(a.dir, NODES_OUT_FILE))
+    nodes_out = os.path.join(a.dir, NODES_OUT_FILE)
+    edges_out = os.path.join(a.dir, EDGES_OUT_FILE)
 
-    process_edges(
-        os.path.join(a.dir, NODES_IN_FILE),
-        a.node_collection,
-        a.load_version,
-        a.load_timestamp,
-        os.path.join(a.dir, EDGES_OUT_FILE))
+    with open(nodes) as infile, open(names) as namesfile, open(nodes_out, 'w') as node_out:
+        nodeprov = NCBINodeProvider(namesfile, infile)
+        process_nodes(nodeprov, a.load_version, a.load_timestamp, node_out)
+
+    with open(nodes) as infile, open(edges_out, 'w') as edgef:
+        edgeprov = NCBIEdgeProvider(infile)
+        process_edges(edgeprov, a.node_collection, a.load_version, a.load_timestamp, edgef)
 
 if __name__  == '__main__':
     main()
