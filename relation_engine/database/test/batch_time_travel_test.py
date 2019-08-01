@@ -557,6 +557,68 @@ def test_expire_extant_vertices_without_last_version(arango_db):
 
     _check_docs(arango_db, expected, col_name)
 
+def test_expire_extant_edges_without_last_version(arango_db):
+    """
+    Tests expiring egdes that exist at a specfic time without a given last version.
+    """
+    col_name = 'edges'
+    col = arango_db.create_collection(col_name, edge=True)
+
+    test_data = [
+        {'_key': '0', 'id': 'baz', 'created': 100, 'expired': 300, 'last_version': '2',
+         '_from': 'fake/1', '_to': 'fake/2'},
+        {'_key': '1', 'id': 'foo', 'created': 100, 'expired': 600, 'last_version': '1',
+         '_from': 'fake/1', '_to': 'fake/2'},
+        {'_key': '2', 'id': 'bar', 'created': 100, 'expired': 200, 'last_version': '1',
+         '_from': 'fake/1', '_to': 'fake/2'},
+        {'_key': '3', 'id': 'bar', 'created': 201, 'expired': 300, 'last_version': '2',
+         '_from': 'fake/1', '_to': 'fake/2'},
+        {'_key': '4', 'id': 'bar', 'created': 301, 'expired': 400, 'last_version': '2',
+         '_from': 'fake/1', '_to': 'fake/2'},
+        ]
+    col.import_bulk(test_data)
+
+    att = ArangoBatchTimeTravellingDB(arango_db, default_edge_collection=col_name)
+
+    # test 1
+    att.expire_extant_edges_without_last_version(100, "2")
+
+    expected = [
+        {'_key': '0', '_id': 'edges/0', 'id': 'baz', 'created': 100, 'expired': 300,
+         'last_version': '2', '_from': 'fake/1', '_to': 'fake/2'},
+        {'_key': '1', '_id': 'edges/1', 'id': 'foo', 'created': 100, 'expired': 100,
+         'last_version': '1', '_from': 'fake/1', '_to': 'fake/2'},
+        {'_key': '2', '_id': 'edges/2', 'id': 'bar', 'created': 100, 'expired': 100,
+         'last_version': '1', '_from': 'fake/1', '_to': 'fake/2'},
+        {'_key': '3', '_id': 'edges/3', 'id': 'bar', 'created': 201, 'expired': 300,
+         'last_version': '2', '_from': 'fake/1', '_to': 'fake/2'},
+        {'_key': '4', '_id': 'edges/4', 'id': 'bar', 'created': 301, 'expired': 400,
+         'last_version': '2', '_from': 'fake/1', '_to': 'fake/2'},
+        ]
+
+    _check_docs(arango_db, expected, col_name)
+
+    # test 2
+    col.delete_match({})
+    col.import_bulk(test_data)
+
+    att.expire_extant_edges_without_last_version(299, "1")
+
+    expected = [
+        {'_key': '0', '_id': 'edges/0', 'id': 'baz', 'created': 100, 'expired': 299,
+         'last_version': '2', '_from': 'fake/1', '_to': 'fake/2'},
+        {'_key': '1', '_id': 'edges/1', 'id': 'foo', 'created': 100, 'expired': 600,
+         'last_version': '1', '_from': 'fake/1', '_to': 'fake/2'},
+        {'_key': '2', '_id': 'edges/2', 'id': 'bar', 'created': 100, 'expired': 200,
+         'last_version': '1', '_from': 'fake/1', '_to': 'fake/2'},
+        {'_key': '3', '_id': 'edges/3', 'id': 'bar', 'created': 201, 'expired': 299,
+         'last_version': '2', '_from': 'fake/1', '_to': 'fake/2'},
+        {'_key': '4', '_id': 'edges/4', 'id': 'bar', 'created': 301, 'expired': 400,
+         'last_version': '2', '_from': 'fake/1', '_to': 'fake/2'},
+        ]
+
+    _check_docs(arango_db, expected, col_name)
+
 def _check_docs(arango_db, docs, collection):
     col = arango_db.collection(collection)
     for d in docs:

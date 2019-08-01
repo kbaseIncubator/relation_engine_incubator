@@ -298,6 +298,25 @@ class ArangoBatchTimeTravellingDB:
         """
         col_name = self._get_vertex_collection(vertex_collection).name
         self._expire_extant_document_without_last_version(timestamp, version, col_name)
+
+    # may need to separate timestamp into find and expire timestamps, but YAGNI for now
+    def expire_extant_edges_without_last_version(
+            self,
+            timestamp,
+            version,
+            edge_collection=None):
+        """
+        Expire all edges that exist at the given timestamp where the last version field is 
+        not equal to the given version. The expiration date will be the given timestamp.
+
+        timestamp - the timestamp to use to find extant edges as well as the timestamp to use
+          as the expiration date.
+        version - the version required for the last version field for a edges to avoid expiration.
+        edge_collection - the collection name to query. If none is provided, the default will
+          be used.
+        """
+        col_name = self._get_edge_collection(edge_collection).name
+        self._expire_extant_document_without_last_version(timestamp, version, col_name)
     
     def _expire_extant_document_without_last_version(self, timestamp, version, col_name):
         self._database.aql.execute(
