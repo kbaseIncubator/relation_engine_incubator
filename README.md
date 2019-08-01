@@ -6,7 +6,8 @@ They may be promoted into one of the [RE repos](https://kbase.github.io/) later.
 Each script / loader / etc. should have its own documentation, either in a readme file with a name
 keyed to the script or embedded in the script.
 
-To run tests, from the repository root:
+To run tests, arangodb must be running locally on the default port without credentials.
+Then from the repository root:
 ```
-pytest
+export PYTHONPATH=$(pwd); pytest
 ```

@@ -89,7 +89,7 @@ class ArangoBatchTimeTravellingDB:
           f"""
           FOR d IN @@col
               FILTER d.{_FLD_ID} == @id
-              FILTER d.{_FLD_CREATED} <= @timestamp && d.{_FLD_EXPIRED} >= @timestamp
+              FILTER d.{_FLD_EXPIRED} >= @timestamp && d.{_FLD_CREATED} <= @timestamp
               RETURN d
           """,
           bind_vars={'id': id_, 'timestamp': timestamp, '@col': collection_name},
@@ -279,6 +279,36 @@ class ArangoBatchTimeTravellingDB:
         """
         col = self._get_edge_collection(edge_collection)
         col.update({_FLD_KEY: key, _FLD_EXPIRED: expiration_time}, silent=True)
+
+    # may need to separate timestamp into find and expire timestamps, but YAGNI for now
+    def expire_extant_vertices_without_last_version(
+            self,
+            timestamp,
+            version,
+            vertex_collection=None):
+        """
+        Expire all vertices that exist at the given timestamp where the last version field is 
+        not equal to the given version. The expiration date will be the given timestamp.
+
+        timestamp - the timestamp to use to find extant vertices as well as the timestamp to use
+          as the expiration date.
+        version - the version required for the last version field for a vertex to avoid expiration.
+        vertex_collection - the collection name to query. If none is provided, the default will
+          be used.
+        """
+        col_name = self._get_vertex_collection(vertex_collection).name
+        self._expire_extant_document_without_last_version(timestamp, version, col_name)
+    
+    def _expire_extant_document_without_last_version(self, timestamp, version, col_name):
+        self._database.aql.execute(
+          f"""
+          FOR d IN @@col
+              FILTER d.{_FLD_EXPIRED} >= @timestamp && d.{_FLD_CREATED} <= @timestamp
+              FILTER d.{_FLD_VER_LST} != @version
+              UPDATE d WITH {{{_FLD_EXPIRED}: @timestamp}} IN @@col
+          """,
+          bind_vars={'version': version, 'timestamp': timestamp, '@col': col_name},
+        )
 
     # mutates in place!
     def _clean(self, obj):
