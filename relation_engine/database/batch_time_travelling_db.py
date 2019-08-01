@@ -77,7 +77,7 @@ class ArangoBatchTimeTravellingDB:
         cur.close()
         return v
 
-    def save_vertex(self, id_, version, timestamp, data, vertex_collection=None):
+    def save_vertex(self, id_, version, created_time, data, vertex_collection=None):
         """
         Save a vertex in the database.
 
@@ -89,8 +89,12 @@ class ArangoBatchTimeTravellingDB:
 
         id_ - the external ID of the node.
         version - the version of the load as part of which the vertex is being created.
-        timestamp - the time at which the node should begin to exist in Unix epoch milliseconds.
+        created_time - the time at which the node should begin to exist in Unix epoch milliseconds.
         data - the node contents as a dict.
+        vertex_collection - the collection name to query. If none is provided, the default will
+          be used.
+
+        Returns the key for the vertex.
         """
 
         col = self._get_vertex_collection(vertex_collection)
@@ -101,10 +105,58 @@ class ArangoBatchTimeTravellingDB:
         data[_FLD_ID] = id_
         data[_FLD_VER_FST] = version
         data[_FLD_VER_LST] = version
-        data[_FLD_CREATED] = timestamp
+        data[_FLD_CREATED] = created_time
         data[_FLD_EXPIRED] = _MAX_ADB_INTEGER
 
         col.insert(data, silent=True)
+        return data[_FLD_KEY]
+
+    def set_last_version_on_vertex(self, key, last_version, vertex_collection=None):
+        """
+        Set the last version field on a vertex.
+
+        key - the key of the vertex.
+        last_version - the version to set.
+        vertex_collection - the collection name to query. If none is provided, the default will
+          be used.
+        """
+        col = self._get_vertex_collection(vertex_collection)
+
+        col.update({_FLD_KEY: key, _FLD_VER_LST: last_version}, silent=True)
+
+    def expire_vertex(self, key, expiration_time, edge_collections=None, vertex_collection=None):
+        """
+        Sets the expiration time on a vertex and adjacent edges in the given collections.
+
+        key - the node key.
+        expiration_time - the time, in Unix epoch milliseconds, to set as the expiration time
+          on the node and any affected edges.
+        edge_collections - a list of names of collections that will be checked for connected
+          edges.
+        vertex_collection - the collection name to query. If none is provided, the default will
+          be used.
+
+        """
+        edge_collections = [] if edge_collections is None else edge_collections
+        col = self._get_vertex_collection(vertex_collection)
+        # filter out nulls or empty strings and fail early on missing collections
+        edge_names = [self._get_edge_collection(e).name for e in edge_collections if e]
+
+        # you can only do updates on one collection at once
+        for ec in edge_names:
+            self._database.aql.execute(
+            f"""
+            WITH @@vcol FOR v, e IN 1 ANY @start @@ecol
+                UPDATE e WITH {{{_FLD_EXPIRED}: @timestamp}} IN @@ecol
+
+            """,
+            bind_vars={'@vcol': col.name,
+                       '@ecol': ec,
+                       'start': col.name + '/' + key,
+                       'timestamp': expiration_time
+                       },
+            )
+        col.update({_FLD_KEY: key, _FLD_EXPIRED: expiration_time}, silent=True)
 
     # mutates in place!
     def _clean(self, obj):

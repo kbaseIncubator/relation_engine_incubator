@@ -25,6 +25,10 @@ def arango_db():
     sys.delete_database(DB_NAME)
 
 def test_get_vertex(arango_db):
+    """
+    Tests that getting a vertex returns the correct vertex. In particular checks for OB1 errors.
+    """
+
     col_name = 'verts'
     col = arango_db.create_collection(col_name)
 
@@ -57,6 +61,10 @@ def test_get_vertex(arango_db):
         assert e.args[0] == 'db contains > 1 vertex for id bar, timestamp 200, collection verts'
 
 def test_save_vertex(arango_db):
+    """
+    Tests saving a vertex and retrieving the new vertex.
+    """
+
     col_name = 'verts'
     arango_db.create_collection(col_name)
     att = ArangoBatchTimeTravellingDB(arango_db, default_vertex_collection=col_name)
@@ -82,4 +90,198 @@ def test_save_vertex(arango_db):
                    'last_version': 'load-ver1',
                    'science': 'yes indeed!'}
 
+def test_set_last_version_on_vertex(arango_db):
+    """
+    Tests setting the `last_version` field on a vertex, and specifically that the correct
+    vertex is modified.
+    """
 
+    col_name = 'verts'
+    arango_db.create_collection(col_name)
+    att = ArangoBatchTimeTravellingDB(arango_db, default_vertex_collection=col_name)
+
+    key = att.save_vertex('myid', 'load-ver1', 500, {'science': 'yes!'})
+    _ = att.save_vertex('myid1', 'load-ver1', 500, {'science': 'yes!'})
+
+    att.set_last_version_on_vertex(key, 'load-ver42')
+
+    ret = att.get_vertex('myid', 600)
+    assert ret == {'_key': 'myid_load-ver1',
+                   'created': 500,
+                   'expired': 9007199254740991,
+                   'first_version': 'load-ver1',
+                   'id': 'myid',
+                   'last_version': 'load-ver42',
+                   'science': 'yes!'}
+
+    ret = att.get_vertex('myid1', 600)
+    assert ret == {'_key': 'myid1_load-ver1',
+                   'created': 500,
+                   'expired': 9007199254740991,
+                   'first_version': 'load-ver1',
+                   'id': 'myid1',
+                   'last_version': 'load-ver1',
+                   'science': 'yes!'}
+
+def _setup_set_node_expired(arango_db):
+
+    vert_col_name = 'verts'
+    edge1_col_name = 'edges1'
+    edge2_col_name = 'edges2'
+    vert_col = arango_db.create_collection(vert_col_name)
+    fake_col = arango_db.create_collection('fake')
+    edge1_col = arango_db.create_collection(edge1_col_name, edge=True)
+    edge2_col = arango_db.create_collection(edge2_col_name, edge=True)
+
+    vert_col.import_bulk([{'_key': '1', 'id': 'foo', 'created': 100, 'expired': 9000},
+                          {'_key': '2', 'id': 'bar', 'created': 100, 'expired': 9000},
+                          ])
+    fake_nodes = [{'_key': '1', 'id': 'bat', 'created': 100, 'expired': 9000},
+                  {'_key': '2', 'id': 'baz', 'created': 100, 'expired': 9000},
+                  ]
+    fake_col.import_bulk(fake_nodes)
+    
+    edges1 = [{'_key': 'e1_1', '_from': 'verts/1', '_to': 'fake/1',
+               'created': 100, 'expired': 9000},
+              {'_key': 'e1_2', '_from': 'fake/2', '_to': 'verts/1',
+               'created': 100, 'expired': 9000},
+              {'_key': 'e1_3', '_from': 'verts/2', '_to': 'fake/1',
+               'created': 100, 'expired': 9000},
+              {'_key': 'e1_4', '_from': 'fake/2', '_to': 'verts/2',
+               'created': 100, 'expired': 9000}, 
+              ]
+
+    edge1_col.import_bulk(edges1)
+
+    edges2 = [{'_key': 'e2_1', '_from': 'verts/1', '_to': 'fake/1',
+               'created': 100, 'expired': 9000},
+              {'_key': 'e2_2', '_from': 'fake/2', '_to': 'verts/1',
+               'created': 100, 'expired': 9000},
+              {'_key': 'e2_3', '_from': 'verts/2', '_to': 'fake/1',
+               'created': 100, 'expired': 9000},
+              {'_key': 'e2_4', '_from': 'fake/2', '_to': 'verts/2',
+               'created': 100, 'expired': 9000}, 
+              ]
+
+    edge2_col.import_bulk(edges2)
+
+    return edges1, edges2
+
+def test_set_node_expired_single_vertex(arango_db):
+    """
+    Tests that given a network of nodes and edges where the edges are in 2 collections and the
+    nodes are in a single collection, expiring a single vertex without providing any edge
+    collections to modify updates only that vertex. No other vertices or edges should be modified.
+
+    See _setup_set_node_expired for the test setup.
+    """
+
+    edges1, edges2 = _setup_set_node_expired(arango_db)
+    att = ArangoBatchTimeTravellingDB(arango_db, default_vertex_collection='verts')
+
+    att.expire_vertex('1', 500)
+
+    ret = att.get_vertex('foo', 200)
+    assert ret == {'_key': '1', 'id': 'foo', 'created': 100, 'expired': 500}
+    ret = att.get_vertex('bar', 200)
+    assert ret == {'_key': '2', 'id': 'bar', 'created': 100, 'expired': 9000}
+
+    _check_no_fake_changes(arango_db)
+
+    _check_docs(arango_db, edges1, 'edges1')
+    _check_docs(arango_db, edges2, 'edges2')
+
+def test_set_node_expired_vert_and_edges_one_collection(arango_db):
+    """
+    Tests that given a network of nodes and edges where the edges are in 2 collections and the
+    nodes are in a single collection, expiring a single vertex where only one of the edge
+    collections is specified to recieve updates results in the correct changes. Only the
+    specfied vertex and the edges connected to that vertex in the specified edge collection should
+    be modified.
+
+    See _setup_set_node_expired for the test setup.
+    """
+
+    _, edges2 = _setup_set_node_expired(arango_db)
+    att = ArangoBatchTimeTravellingDB(arango_db, default_vertex_collection='verts')
+
+    att.expire_vertex('1', 500, ['edges1'])
+
+    ret = att.get_vertex('foo', 200)
+    assert ret == {'_key': '1', 'id': 'foo', 'created': 100, 'expired': 500}
+    ret = att.get_vertex('bar', 200)
+    assert ret == {'_key': '2', 'id': 'bar', 'created': 100, 'expired': 9000}
+
+    _check_no_fake_changes(arango_db)
+
+    e1_exp = [{'_key': 'e1_1', '_from': 'verts/1', '_to': 'fake/1',
+               'created': 100, 'expired': 500},
+              {'_key': 'e1_2', '_from': 'fake/2', '_to': 'verts/1',
+               'created': 100, 'expired': 500},
+              {'_key': 'e1_3', '_from': 'verts/2', '_to': 'fake/1',
+               'created': 100, 'expired': 9000},
+              {'_key': 'e1_4', '_from': 'fake/2', '_to': 'verts/2',
+               'created': 100, 'expired': 9000}, 
+              ]
+    _check_docs(arango_db, e1_exp, 'edges1')
+
+    _check_docs(arango_db, edges2, 'edges2')
+
+def test_set_node_expired_vert_and_edges_two_collections(arango_db):
+    """
+    Tests that given a network of nodes and edges where the edges are in 2 collections and the
+    nodes are in a single collection, expiring a single vertex where both of the edge
+    collections are specified to recieve updates results in the correct changes. Only the
+    specfied vertex and the edges connected to that vertex in any edge collection should
+    be modified.
+
+    See _setup_set_node_expired for the test setup.
+    """
+
+    _setup_set_node_expired(arango_db)
+    att = ArangoBatchTimeTravellingDB(arango_db, default_vertex_collection='verts')
+
+    att.expire_vertex('1', 500, ['edges1', 'edges2'])
+
+    ret = att.get_vertex('foo', 200)
+    assert ret == {'_key': '1', 'id': 'foo', 'created': 100, 'expired': 500}
+    ret = att.get_vertex('bar', 200)
+    assert ret == {'_key': '2', 'id': 'bar', 'created': 100, 'expired': 9000}
+
+    _check_no_fake_changes(arango_db)
+
+    e1_exp = [{'_key': 'e1_1', '_from': 'verts/1', '_to': 'fake/1',
+               'created': 100, 'expired': 500},
+              {'_key': 'e1_2', '_from': 'fake/2', '_to': 'verts/1',
+               'created': 100, 'expired': 500},
+              {'_key': 'e1_3', '_from': 'verts/2', '_to': 'fake/1',
+               'created': 100, 'expired': 9000},
+              {'_key': 'e1_4', '_from': 'fake/2', '_to': 'verts/2',
+               'created': 100, 'expired': 9000}, 
+              ]
+    _check_docs(arango_db, e1_exp, 'edges1')
+
+    e2_exp = [{'_key': 'e2_1', '_from': 'verts/1', '_to': 'fake/1',
+               'created': 100, 'expired': 500},
+              {'_key': 'e2_2', '_from': 'fake/2', '_to': 'verts/1',
+               'created': 100, 'expired': 500},
+              {'_key': 'e2_3', '_from': 'verts/2', '_to': 'fake/1',
+               'created': 100, 'expired': 9000},
+              {'_key': 'e2_4', '_from': 'fake/2', '_to': 'verts/2',
+               'created': 100, 'expired': 9000}, 
+              ]
+    _check_docs(arango_db, e2_exp, 'edges2')
+
+def _check_docs(arango_db, docs, collection):
+    col = arango_db.collection(collection)
+    for d in docs:
+        doc = col.get(d['_key'])
+        del doc['_rev']
+        del doc['_id']
+        assert d == doc
+
+def _check_no_fake_changes(arango_db):
+    fake_nodes = [{'_key': '1', 'id': 'bat', 'created': 100, 'expired': 9000},
+                  {'_key': '2', 'id': 'baz', 'created': 100, 'expired': 9000},
+                  ]
+    _check_docs(arango_db, fake_nodes, 'fake')
