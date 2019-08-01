@@ -24,6 +24,24 @@ def arango_db():
 
     sys.delete_database(DB_NAME)
 
+def test_get_default_vertex_collection(arango_db):
+    arango_db.create_collection('v')
+
+    att = ArangoBatchTimeTravellingDB(arango_db)
+    assert att.get_default_vertex_collection() is None
+
+    att = ArangoBatchTimeTravellingDB(arango_db, default_vertex_collection='v')
+    assert att.get_default_vertex_collection() is 'v'
+
+def test_get_default_edge_collection(arango_db):
+    arango_db.create_collection('e', edge=True)
+
+    att = ArangoBatchTimeTravellingDB(arango_db)
+    assert att.get_default_edge_collection() is None
+
+    att = ArangoBatchTimeTravellingDB(arango_db, default_edge_collection='e')
+    assert att.get_default_edge_collection() is 'e'
+
 def test_init_fail_bad_edge_collection(arango_db):
     col_name = 'edge'
     arango_db.create_collection(col_name)
