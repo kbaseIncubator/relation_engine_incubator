@@ -42,13 +42,13 @@ def test_get_vertex(arango_db):
     att = ArangoBatchTimeTravellingDB(arango_db, default_vertex_collection=col_name)
 
     ret = att.get_vertex('bar', 201)
-    assert ret == {'_key': '3', 'id': 'bar', 'created': 201, 'expired': 300}
+    assert ret == {'_key': '3', '_id': 'verts/3', 'id': 'bar', 'created': 201, 'expired': 300}
 
     ret = att.get_vertex('bar', 300)
-    assert ret == {'_key': '3', 'id': 'bar', 'created': 201, 'expired': 300}
+    assert ret == {'_key': '3', '_id': 'verts/3', 'id': 'bar', 'created': 201, 'expired': 300}
 
     ret = att.get_vertex('foo', 250)
-    assert ret == {'_key': '1', 'id': 'foo', 'created': 100, 'expired': 600}
+    assert ret == {'_key': '1', '_id': 'verts/1', 'id': 'foo', 'created': 100, 'expired': 600}
 
     assert att.get_vertex('bar', 99) == None
     assert att.get_vertex('bar', 401) == None
@@ -58,7 +58,51 @@ def test_get_vertex(arango_db):
     try:
         att.get_vertex('bar', 200)
     except ValueError as e:
-        assert e.args[0] == 'db contains > 1 vertex for id bar, timestamp 200, collection verts'
+        assert e.args[0] == 'db contains > 1 document for id bar, timestamp 200, collection verts'
+
+def test_get_edge(arango_db):
+    """
+    Tests that getting a edge returns the correct edge. In particular checks for OB1 errors.
+    """
+
+    col_name = 'edges'
+    col = arango_db.create_collection(col_name, edge=True)
+
+    # it's assumed that given an id and a timestamp there's <= 1 match in the collection
+    col.import_bulk([{'_key': '1', '_from': 'fake/1', '_to': 'fake/2', 'id': 'foo',
+                      'created': 100, 'expired': 600},
+                     {'_key': '2', '_from': 'fake/1', '_to': 'fake/2', 'id': 'bar',
+                      'created': 100, 'expired': 200},
+                     {'_key': '3', '_from': 'fake/1', '_to': 'fake/2', 'id': 'bar',
+                      'created': 201, 'expired': 300}, # target
+                     {'_key': '4', '_from': 'fake/1', '_to': 'fake/2', 'id': 'bar',
+                      'created': 301, 'expired': 400},
+                     ])
+
+    att = ArangoBatchTimeTravellingDB(arango_db, default_edge_collection=col_name)
+
+    ret = att.get_edge('bar', 201)
+    assert ret == {'_key': '3', '_id': 'edges/3', '_from': 'fake/1', '_to': 'fake/2', 'id': 'bar',
+                   'created': 201, 'expired': 300}
+
+    ret = att.get_edge('bar', 300)
+    assert ret == {'_key': '3', '_id': 'edges/3', '_from': 'fake/1', '_to': 'fake/2', 'id': 'bar',
+                   'created': 201, 'expired': 300}
+
+    ret = att.get_edge('foo', 250)
+    assert ret == {'_key': '1', '_id': 'edges/1', '_from': 'fake/1', '_to': 'fake/2', 'id': 'foo',
+                   'created': 100, 'expired': 600}
+
+    assert att.get_edge('bar', 99) == None
+    assert att.get_edge('bar', 401) == None
+
+    col.insert({'_key': '5', '_from': 'fake/1', '_to': 'fake/2', 'id': 'bar',
+                'created': 150, 'expired': 250})
+
+    try:
+        att.get_edge('bar', 200)
+    except ValueError as e:
+        assert e.args[0] == 'db contains > 1 document for id bar, timestamp 200, collection edges'
 
 def test_save_vertex(arango_db):
     """
@@ -74,6 +118,7 @@ def test_save_vertex(arango_db):
 
     ret = att.get_vertex('myid', 600)
     assert ret == {'_key': 'myid_load-ver1',
+                   '_id': 'verts/myid_load-ver1',
                    'created': 500,
                    'expired': 9007199254740991,
                    'first_version': 'load-ver1',
@@ -83,6 +128,58 @@ def test_save_vertex(arango_db):
     
     ret = att.get_vertex('myid2', 600)
     assert ret == {'_key': 'myid2_load-ver1',
+                   '_id': 'verts/myid2_load-ver1',
+                   'created': 600,
+                   'expired': 9007199254740991,
+                   'first_version': 'load-ver1',
+                   'id': 'myid2',
+                   'last_version': 'load-ver1',
+                   'science': 'yes indeed!'}
+
+
+def test_save_edge(arango_db):
+    """
+    Tests saving an edge and retrieving the new edge.
+    """
+
+    col_name = 'edges'
+    arango_db.create_collection(col_name, edge=True)
+    att = ArangoBatchTimeTravellingDB(arango_db, default_edge_collection=col_name)
+
+    att.save_edge(
+        'myid',
+        {'id': 'whee', '_id': 'fake/1'},
+        {'id': 'whoo', '_id': 'fake/2'},
+        'load-ver1',
+        500)
+    att.save_edge(
+        'myid2',
+        {'id': 'whee', '_id': 'fake/1'},
+        {'id': 'whoo', '_id': 'fake/2'},
+        'load-ver1',
+        600,
+        {'science': 'yes indeed!'})
+
+    ret = att.get_edge('myid', 600)
+    assert ret == {'_key': 'myid_load-ver1',
+                   '_id': 'edges/myid_load-ver1',
+                   '_from': 'fake/1',
+                   '_to': 'fake/2',
+                   'from': 'whee',
+                   'to': 'whoo',
+                   'created': 500,
+                   'expired': 9007199254740991,
+                   'first_version': 'load-ver1',
+                   'id': 'myid',
+                   'last_version': 'load-ver1'}
+    
+    ret = att.get_edge('myid2', 600)
+    assert ret == {'_key': 'myid2_load-ver1',
+                   '_id': 'edges/myid2_load-ver1',
+                   '_from': 'fake/1',
+                   '_to': 'fake/2',
+                   'from': 'whee',
+                   'to': 'whoo',
                    'created': 600,
                    'expired': 9007199254740991,
                    'first_version': 'load-ver1',
@@ -107,6 +204,7 @@ def test_set_last_version_on_vertex(arango_db):
 
     ret = att.get_vertex('myid', 600)
     assert ret == {'_key': 'myid_load-ver1',
+                   '_id': 'verts/myid_load-ver1',
                    'created': 500,
                    'expired': 9007199254740991,
                    'first_version': 'load-ver1',
@@ -116,6 +214,7 @@ def test_set_last_version_on_vertex(arango_db):
 
     ret = att.get_vertex('myid1', 600)
     assert ret == {'_key': 'myid1_load-ver1',
+                   '_id': 'verts/myid1_load-ver1',
                    'created': 500,
                    'expired': 9007199254740991,
                    'first_version': 'load-ver1',
@@ -133,33 +232,35 @@ def _setup_set_node_expired(arango_db):
     edge1_col = arango_db.create_collection(edge1_col_name, edge=True)
     edge2_col = arango_db.create_collection(edge2_col_name, edge=True)
 
-    vert_col.import_bulk([{'_key': '1', 'id': 'foo', 'created': 100, 'expired': 9000},
-                          {'_key': '2', 'id': 'bar', 'created': 100, 'expired': 9000},
-                          ])
-    fake_nodes = [{'_key': '1', 'id': 'bat', 'created': 100, 'expired': 9000},
-                  {'_key': '2', 'id': 'baz', 'created': 100, 'expired': 9000},
-                  ]
+    vert_col.import_bulk([
+        {'_key': '1', '_id': 'verts/1', 'id': 'foo', 'created': 100, 'expired': 9000},
+        {'_key': '2', '_id': 'verts/2', 'id': 'bar', 'created': 100, 'expired': 9000},
+        ])
+    fake_nodes = [
+        {'_key': '1', '_id': 'fake/1', 'id': 'bat', 'created': 100, 'expired': 9000},
+        {'_key': '2', '_id': 'fake/2', 'id': 'baz', 'created': 100, 'expired': 9000},
+        ]
     fake_col.import_bulk(fake_nodes)
     
-    edges1 = [{'_key': 'e1_1', '_from': 'verts/1', '_to': 'fake/1',
+    edges1 = [{'_key': 'e1_1', '_id': 'edges1/e1_1', '_from': 'verts/1', '_to': 'fake/1',
                'created': 100, 'expired': 9000},
-              {'_key': 'e1_2', '_from': 'fake/2', '_to': 'verts/1',
+              {'_key': 'e1_2', '_id': 'edges1/e1_2', '_from': 'fake/2', '_to': 'verts/1',
                'created': 100, 'expired': 9000},
-              {'_key': 'e1_3', '_from': 'verts/2', '_to': 'fake/1',
+              {'_key': 'e1_3', '_id': 'edges1/e1_3', '_from': 'verts/2', '_to': 'fake/1',
                'created': 100, 'expired': 9000},
-              {'_key': 'e1_4', '_from': 'fake/2', '_to': 'verts/2',
+              {'_key': 'e1_4', '_id': 'edges1/e1_4', '_from': 'fake/2', '_to': 'verts/2',
                'created': 100, 'expired': 9000}, 
               ]
 
     edge1_col.import_bulk(edges1)
 
-    edges2 = [{'_key': 'e2_1', '_from': 'verts/1', '_to': 'fake/1',
+    edges2 = [{'_key': 'e2_1', '_id': 'edges2/e2_1', '_from': 'verts/1', '_to': 'fake/1',
                'created': 100, 'expired': 9000},
-              {'_key': 'e2_2', '_from': 'fake/2', '_to': 'verts/1',
+              {'_key': 'e2_2', '_id': 'edges2/e2_2', '_from': 'fake/2', '_to': 'verts/1',
                'created': 100, 'expired': 9000},
-              {'_key': 'e2_3', '_from': 'verts/2', '_to': 'fake/1',
+              {'_key': 'e2_3', '_id': 'edges2/e2_3', '_from': 'verts/2', '_to': 'fake/1',
                'created': 100, 'expired': 9000},
-              {'_key': 'e2_4', '_from': 'fake/2', '_to': 'verts/2',
+              {'_key': 'e2_4', '_id': 'edges2/e2_4', '_from': 'fake/2', '_to': 'verts/2',
                'created': 100, 'expired': 9000}, 
               ]
 
@@ -182,9 +283,9 @@ def test_set_node_expired_single_vertex(arango_db):
     att.expire_vertex('1', 500)
 
     ret = att.get_vertex('foo', 200)
-    assert ret == {'_key': '1', 'id': 'foo', 'created': 100, 'expired': 500}
+    assert ret == {'_key': '1', '_id': 'verts/1', 'id': 'foo', 'created': 100, 'expired': 500}
     ret = att.get_vertex('bar', 200)
-    assert ret == {'_key': '2', 'id': 'bar', 'created': 100, 'expired': 9000}
+    assert ret == {'_key': '2', '_id': 'verts/2', 'id': 'bar', 'created': 100, 'expired': 9000}
 
     _check_no_fake_changes(arango_db)
 
@@ -208,19 +309,19 @@ def test_set_node_expired_vert_and_edges_one_collection(arango_db):
     att.expire_vertex('1', 500, ['edges1'])
 
     ret = att.get_vertex('foo', 200)
-    assert ret == {'_key': '1', 'id': 'foo', 'created': 100, 'expired': 500}
+    assert ret == {'_key': '1', '_id': 'verts/1', 'id': 'foo', 'created': 100, 'expired': 500}
     ret = att.get_vertex('bar', 200)
-    assert ret == {'_key': '2', 'id': 'bar', 'created': 100, 'expired': 9000}
+    assert ret == {'_key': '2', '_id': 'verts/2', 'id': 'bar', 'created': 100, 'expired': 9000}
 
     _check_no_fake_changes(arango_db)
 
-    e1_exp = [{'_key': 'e1_1', '_from': 'verts/1', '_to': 'fake/1',
+    e1_exp = [{'_key': 'e1_1', '_id': 'edges1/e1_1', '_from': 'verts/1', '_to': 'fake/1',
                'created': 100, 'expired': 500},
-              {'_key': 'e1_2', '_from': 'fake/2', '_to': 'verts/1',
+              {'_key': 'e1_2', '_id': 'edges1/e1_2', '_from': 'fake/2', '_to': 'verts/1',
                'created': 100, 'expired': 500},
-              {'_key': 'e1_3', '_from': 'verts/2', '_to': 'fake/1',
+              {'_key': 'e1_3', '_id': 'edges1/e1_3', '_from': 'verts/2', '_to': 'fake/1',
                'created': 100, 'expired': 9000},
-              {'_key': 'e1_4', '_from': 'fake/2', '_to': 'verts/2',
+              {'_key': 'e1_4', '_id': 'edges1/e1_4', '_from': 'fake/2', '_to': 'verts/2',
                'created': 100, 'expired': 9000}, 
               ]
     _check_docs(arango_db, e1_exp, 'edges1')
@@ -244,30 +345,30 @@ def test_set_node_expired_vert_and_edges_two_collections(arango_db):
     att.expire_vertex('1', 500, ['edges1', 'edges2'])
 
     ret = att.get_vertex('foo', 200)
-    assert ret == {'_key': '1', 'id': 'foo', 'created': 100, 'expired': 500}
+    assert ret == {'_key': '1', '_id': 'verts/1', 'id': 'foo', 'created': 100, 'expired': 500}
     ret = att.get_vertex('bar', 200)
-    assert ret == {'_key': '2', 'id': 'bar', 'created': 100, 'expired': 9000}
+    assert ret == {'_key': '2', '_id': 'verts/2', 'id': 'bar', 'created': 100, 'expired': 9000}
 
     _check_no_fake_changes(arango_db)
 
-    e1_exp = [{'_key': 'e1_1', '_from': 'verts/1', '_to': 'fake/1',
+    e1_exp = [{'_key': 'e1_1', '_id': 'edges1/e1_1', '_from': 'verts/1', '_to': 'fake/1',
                'created': 100, 'expired': 500},
-              {'_key': 'e1_2', '_from': 'fake/2', '_to': 'verts/1',
+              {'_key': 'e1_2', '_id': 'edges1/e1_2', '_from': 'fake/2', '_to': 'verts/1',
                'created': 100, 'expired': 500},
-              {'_key': 'e1_3', '_from': 'verts/2', '_to': 'fake/1',
+              {'_key': 'e1_3', '_id': 'edges1/e1_3', '_from': 'verts/2', '_to': 'fake/1',
                'created': 100, 'expired': 9000},
-              {'_key': 'e1_4', '_from': 'fake/2', '_to': 'verts/2',
+              {'_key': 'e1_4', '_id': 'edges1/e1_4', '_from': 'fake/2', '_to': 'verts/2',
                'created': 100, 'expired': 9000}, 
               ]
     _check_docs(arango_db, e1_exp, 'edges1')
 
-    e2_exp = [{'_key': 'e2_1', '_from': 'verts/1', '_to': 'fake/1',
+    e2_exp = [{'_key': 'e2_1', '_id': 'edges2/e2_1', '_from': 'verts/1', '_to': 'fake/1',
                'created': 100, 'expired': 500},
-              {'_key': 'e2_2', '_from': 'fake/2', '_to': 'verts/1',
+              {'_key': 'e2_2', '_id': 'edges2/e2_2', '_from': 'fake/2', '_to': 'verts/1',
                'created': 100, 'expired': 500},
-              {'_key': 'e2_3', '_from': 'verts/2', '_to': 'fake/1',
+              {'_key': 'e2_3', '_id': 'edges2/e2_3', '_from': 'verts/2', '_to': 'fake/1',
                'created': 100, 'expired': 9000},
-              {'_key': 'e2_4', '_from': 'fake/2', '_to': 'verts/2',
+              {'_key': 'e2_4', '_id': 'edges2/e2_4', '_from': 'fake/2', '_to': 'verts/2',
                'created': 100, 'expired': 9000}, 
               ]
     _check_docs(arango_db, e2_exp, 'edges2')
@@ -277,11 +378,10 @@ def _check_docs(arango_db, docs, collection):
     for d in docs:
         doc = col.get(d['_key'])
         del doc['_rev']
-        del doc['_id']
         assert d == doc
 
 def _check_no_fake_changes(arango_db):
-    fake_nodes = [{'_key': '1', 'id': 'bat', 'created': 100, 'expired': 9000},
-                  {'_key': '2', 'id': 'baz', 'created': 100, 'expired': 9000},
+    fake_nodes = [{'_key': '1', '_id': 'fake/1', 'id': 'bat', 'created': 100, 'expired': 9000},
+                  {'_key': '2', '_id': 'fake/2', 'id': 'baz', 'created': 100, 'expired': 9000},
                   ]
     _check_docs(arango_db, fake_nodes, 'fake')

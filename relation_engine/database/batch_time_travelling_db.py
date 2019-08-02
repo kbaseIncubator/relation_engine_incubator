@@ -8,12 +8,19 @@ more classes and methods can be added as needed.
 
 """
 
-from arango.exceptions import CursorEmptyError
+from arango.exceptions import CursorEmptyError as _CursorEmptyError
 
-_INTERNAL_ARANGO_FIELDS = ['_id', '_rev']
+_INTERNAL_ARANGO_FIELDS = ['_rev']
 
 _FLD_KEY = '_key'
+_FLD_FULL_ID = '_id'
 _FLD_ID = 'id'
+
+_FLD_FROM = '_from'
+_FLD_FROM_ID = 'from'
+_FLD_TO = '_to'
+_FLD_TO_ID = 'to'
+
 _FLD_VER_LST = 'last_version'
 _FLD_VER_FST = 'first_version'
 _FLD_CREATED = 'created'
@@ -48,34 +55,52 @@ class ArangoBatchTimeTravellingDB:
         """
         Get a vertex from a collection that exists at the given timestamp.
 
-        A node ID and a timestamp uniquely identifies a node in a collection.
+        A vertex ID and a timestamp uniquely identifies a vertex in a collection.
 
         id_ - the ID of the vertex.
-        timestamp - the time at which the node must exist in Unix epoch milliseconds.
+        timestamp - the time at which the vertex must exist in Unix epoch milliseconds.
         vertex_collection - the collection name to query. If none is provided, the default will
           be used.
         """
         col_name = self._get_vertex_collection(vertex_collection).name
+        return self._get_document(id_, timestamp, col_name)
+
+    def _get_document(self, id_, timestamp, collection_name):
         cur = self._database.aql.execute(
           f"""
-          FOR v IN @@col
-              FILTER v.{_FLD_ID} == @id
-              FILTER v.{_FLD_CREATED} <= @timestamp && v.{_FLD_EXPIRED} >= @timestamp
-              RETURN v
+          FOR d IN @@col
+              FILTER d.{_FLD_ID} == @id
+              FILTER d.{_FLD_CREATED} <= @timestamp && d.{_FLD_EXPIRED} >= @timestamp
+              RETURN d
           """,
-          bind_vars={'id': id_, 'timestamp': timestamp, '@col': col_name},
+          bind_vars={'id': id_, 'timestamp': timestamp, '@col': collection_name},
           count=True
         )
         if cur.count() > 1:
-            raise ValueError(f'db contains > 1 vertex for id {id_}, timestamp {timestamp}, ' +
-                             f'collection {col_name}')
+            raise ValueError(f'db contains > 1 document for id {id_}, timestamp {timestamp}, ' +
+                             f'collection {collection_name}')
         
         try:
-            v = self._clean(cur.pop())
-        except CursorEmptyError as _:
-            v = None
+            d = self._clean(cur.pop())
+        except _CursorEmptyError as _:
+            d = None
         cur.close()
-        return v
+        return d
+
+    def get_edge(self, id_, timestamp, edge_collection=None):
+        """
+        Get an edge from a collection that exists at the given timestamp.
+
+        An edge ID and a timestamp uniquely identifies an edge in a collection.
+
+        id_ - the ID of the edge.
+        timestamp - the time at which the vertex must exist in Unix epoch milliseconds.
+        edge_collection - the collection name to query. If none is provided, the default will
+          be used.
+        """
+        col_name = self._get_edge_collection(edge_collection).name
+        return self._get_document(id_, timestamp, col_name)
+
 
     def save_vertex(self, id_, version, created_time, data, vertex_collection=None):
         """
@@ -85,14 +110,15 @@ class ArangoBatchTimeTravellingDB:
         embedded data structures may have unexpected results.
 
         The _key field is generated from the id_ and version fields, which are expected to uniquely
-        identify a node.
+        identify a vertex.
 
-        id_ - the external ID of the node.
+        id_ - the external ID of the vertex.
         version - the version of the load as part of which the vertex is being created.
-        created_time - the time at which the node should begin to exist in Unix epoch milliseconds.
-        data - the node contents as a dict.
-        vertex_collection - the collection name to query. If none is provided, the default will
-          be used.
+        created_time - the time at which the vertex should begin to exist in Unix epoch
+          milliseconds.
+        data - the vertex contents as a dict.
+        vertex_collection - the name of the collection to modify. If none is provided, the default
+          will be used.
 
         Returns the key for the vertex.
         """
@@ -103,6 +129,56 @@ class ArangoBatchTimeTravellingDB:
         data = dict(data) # make a copy and overwrite the old data variable
         data[_FLD_KEY] = id_ + '_' + version
         data[_FLD_ID] = id_
+        data[_FLD_VER_FST] = version
+        data[_FLD_VER_LST] = version
+        data[_FLD_CREATED] = created_time
+        data[_FLD_EXPIRED] = _MAX_ADB_INTEGER
+
+        col.insert(data, silent=True)
+        return data[_FLD_KEY]
+
+    def save_edge(
+            self,
+            id_,
+            from_vertex,
+            to_vertex,
+            version,
+            created_time,
+            data=None,
+            edge_collection=None):
+        """
+        Save an edge in the database.
+
+        Note that only a shallow copy of the data is made before adding database fields. Modifying
+        embedded data structures may have unexpected results.
+
+        The _key field is generated from the id_ and version fields, which are expected to uniquely
+        identify an edge.
+
+        id_ - the external ID of the edge.
+        from_vertex - the vertex where the edge originates. This vertex must have been fetched from
+          the database.
+        to_vertex - the vertex where the edge terminates. This vertex must have been fetched from
+          the database.
+        version - the version of the load as part of which the edge is being created.
+        created_time - the time at which the edge should begin to exist in Unix epoch milliseconds.
+        data - the edge contents as a dict.
+        edge_collection - the name of the collection to modify. If none is provided, the default
+          will be used.
+
+        Returns the key for the edge.
+        """
+        col = self._get_edge_collection(edge_collection)
+        data = {} if not data else data
+
+        # May want a bulk method
+        data = dict(data) # make a copy and overwrite the old data variable
+        data[_FLD_KEY] = id_ + '_' + version
+        data[_FLD_ID] = id_
+        data[_FLD_FROM] = from_vertex[_FLD_FULL_ID]
+        data[_FLD_FROM_ID] = from_vertex[_FLD_ID]
+        data[_FLD_TO] = to_vertex[_FLD_FULL_ID]
+        data[_FLD_TO_ID] = to_vertex[_FLD_ID]
         data[_FLD_VER_FST] = version
         data[_FLD_VER_LST] = version
         data[_FLD_CREATED] = created_time
@@ -137,7 +213,7 @@ class ArangoBatchTimeTravellingDB:
           be used.
 
         """
-        edge_collections = [] if edge_collections is None else edge_collections
+        edge_collections = [] if not edge_collections else edge_collections
         col = self._get_vertex_collection(vertex_collection)
         # filter out nulls or empty strings and fail early on missing collections
         edge_names = [self._get_edge_collection(e).name for e in edge_collections if e]
