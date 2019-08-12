@@ -2,10 +2,12 @@
 Common code for dealing with NCBI taxonomy files.
 """
 
+# TODO tests
+
 import re
 import unicodedata
 from collections import defaultdict
-from relation_engine.load_utils import canonicalize
+from relation_engine.batchload.load_utils import canonicalize
 
 _CANONICAL_IGNORE_SET = {'et','al','and','or','the','a'}
 _SEP = r'\s\|\s?'
@@ -73,8 +75,7 @@ class NCBINodeProvider:
 class NCBIEdgeProvider:
     """
     NCBIEdgeProvider is an iterable that returns a new NCBI taxonomy edge as a dict where the
-    from key is the child ID and the to key the parent ID with each
-    iteration.
+    from key is the child ID and the to key the parent ID with each iteration.
     It requires access to the nodes.dmp files from a taxonomy dump.
     """
 
@@ -98,5 +99,29 @@ class NCBIEdgeProvider:
                 'id': id_, # since there's 1 edge / child the child id uniquely IDs the edge
                 'from': id_,
                 'to': parent
+            }
+            yield edge
+
+class NCBIMergeProvider:
+    """
+    NCBIMergeProvider is an iterable that returns merged node information as a dict where the from
+    key is the merged node ID and the to key the merge target node ID.
+    """
+
+    def __init__(self, merges_filehandle):
+        """
+        Create the provider.
+        merges_filehandle - the open merged.dmp file.
+        """
+        self._merge_fh = merges_filehandle
+
+    def __iter__(self):
+        for line in self._merge_fh:
+            record = re.split(_SEP, line)
+            merged = record[0].strip()
+            edge = {
+                'id': merged, # since you can't merge into multiple nodes, the id is a unique id
+                'from': merged,
+                'to': record[1].strip()
             }
             yield edge

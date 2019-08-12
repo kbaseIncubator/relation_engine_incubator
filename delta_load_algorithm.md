@@ -158,15 +158,15 @@ def main():
     for edge in get_edges(edges_source)
         existing = get_edge_from_db(edge.id, timestamp)
         edge.type = std
+        from = get_node_from_db(edge.from, timestamp)
+        to = get_node_from_db(edge.to, timestamp)
         if existing:
-            from = get_node_from_db(edge.from, timestamp)
-            to = get_node_from_db(edge.to, timestamp)
             if existing != edge or existing._from != from._key or existing._to != to._key:
                 set_edge_expiration_in_db(existing._key, timestamp - 1)
                 create_edge(from, to, edge)
             else:
                 # mark edge as extant in current load
-                set_last_edge_version_in_db(existing._key, timestamp, version)
+                set_last_edge_version_in_db(existing._key, version)
         else:
             create_edge(from, to, edge)
     
