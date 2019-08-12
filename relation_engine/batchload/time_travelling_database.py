@@ -70,6 +70,22 @@ class ArangoBatchTimeTravellingDB:
             raise ValueError(f'{collection} is not an edge collection')
         return c
 
+    def get_default_vertex_collection(self):
+      """
+      Returns the name of the default vertex collection or None.
+      """
+      if not self._has_vert_col:
+          return None
+      return self._default_vertex_collection.name
+
+    def get_default_edge_collection(self):
+      """
+      Returns the name of the default vertex collection or None.
+      """
+      if not self._has_edge_col:
+          return None
+      return self._default_edge_collection.name
+
     def get_vertex(self, id_, timestamp, vertex_collection=None):
         """
         Get a vertex from a collection that exists at the given timestamp.
