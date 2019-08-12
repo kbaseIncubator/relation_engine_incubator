@@ -67,7 +67,17 @@ def load_graph_delta(
         # if count % 1000 == 0:
         #     print(f'node {count}')
 
-    # TODO merges (comes before deleting vertices)
+    if merge_information:
+        for m in merge_information[0]:
+            dbmerged = db.get_vertex(m['from'], timestamp)
+            dbtarget = db.get_vertex(m['to'], timestamp)
+            # only add the merge if nodes exist at this point
+            # trying to figure out where to set the edge if nodes are deleted gets complicated,
+            # so we don't worry about it for now.
+            if dbmerged and dbtarget:
+                db.expire_vertex(dbmerged[_KEY], timestamp - 1, edge_collections=edge_collections)
+                db.save_edge(m[_ID], dbmerged, dbtarget, load_version, timestamp,
+                    edge_collection=merge_information[1])
 
     # print('del nodes')
     db.expire_extant_vertices_without_last_version(timestamp - 1, load_version)
