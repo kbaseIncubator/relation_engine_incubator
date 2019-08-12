@@ -22,8 +22,6 @@
 #       ncbi_taxa_nodes.json    - the taxa vertexes
 #       ncbi_taxa_edges.json    - the taxa edges
 
-# TODO TESTS
-
 import argparse
 import json
 import os
