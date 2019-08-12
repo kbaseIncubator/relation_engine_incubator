@@ -65,15 +65,15 @@ def main():
     url = urlparse(a.arango_url)
     client = ArangoClient(protocol=url.scheme, host=url.hostname, port=url.port)
     attdb = ArangoBatchTimeTravellingDB(
-        client.db(a.database),
+        client.db(a.database, verify=True),
         default_vertex_collection=a.node_collection,
-        default_edge_collection=a.default_edge_collection)
+        default_edge_collection=a.edge_collection)
 
     with open(nodes) as in1, open(names) as namesfile, open(nodes) as in2:
         nodeprov = NCBINodeProvider(namesfile, in1)
         edgeprov = NCBIEdgeProvider(in2)
 
-        load_graph_delta(nodeprov, edgeprov, attdb, a.timestamp, a.load_version)
+        load_graph_delta(nodeprov, edgeprov, attdb, a.load_timestamp, a.load_version)
 
 if __name__  == '__main__':
     main()

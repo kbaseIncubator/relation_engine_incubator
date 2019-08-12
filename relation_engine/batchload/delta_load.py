@@ -51,6 +51,7 @@ def load_graph_delta(
     if merge_information:
         edge_collections.append(merge_information[1])
     
+    # count = 0
     for v in vertex_source:
         # could batch things up here if slow
         dbv = db.get_vertex(v[_ID], timestamp)
@@ -62,11 +63,16 @@ def load_graph_delta(
         else:
             # mark node as seen in this version
             db.set_last_version_on_vertex(dbv[_KEY], load_version)
+        # count += 1
+        # if count % 1000 == 0:
+        #     print(f'node {count}')
 
     # TODO merges (comes before deleting vertices)
 
+    # print('del nodes')
     db.expire_extant_vertices_without_last_version(timestamp - 1, load_version)
 
+    # count = 0
     for e in edge_source:
         # could batch things up here if slow
         dbe = db.get_edge(e[_ID], timestamp)
@@ -87,7 +93,11 @@ def load_graph_delta(
                 db.set_last_version_on_edge(dbe[_KEY], load_version)
         else:
             db.save_edge(e[_ID], from_, to, load_version, timestamp, e)
+        # count += 1
+        # if count % 1000 == 0:
+        #     print(f'edge {count}')
 
+    # print('del edges')
     db.expire_extant_edges_without_last_version(timestamp - 1, load_version)
 
 # TODO these fields are shared between here and the database. Should probably put them somewhere in common.
@@ -105,7 +115,7 @@ def _special_equal(doc1, doc2):
     d2c = dict(doc2)
 
     for f in _SPECIAL_EQUAL_IGNORED_FIELDS:
-        del d1c[f]
-        del d2c[f]
+        d1c.pop(f, None)
+        d2c.pop(f, None)
     
     return d1c == d2c 

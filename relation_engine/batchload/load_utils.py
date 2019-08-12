@@ -61,7 +61,7 @@ def process_nodes(nodeprov, load_version, timestamp, nodes_out):
             'first_version':  load_version,
             'last_version':   load_version,
             'created':        timestamp,
-            'expires':        _MAX_ADB_INTEGER
+            'expired':        _MAX_ADB_INTEGER
             })
         nodes_out.write(json.dumps(n) + '\n')
 
@@ -93,6 +93,6 @@ def process_edges(edgeprov, node_collection, load_version, timestamp, edges_out)
             'first_version':    load_version,
             'last_version':     load_version,
             'created':          timestamp,
-            'expires':          _MAX_ADB_INTEGER,
+            'expired':          _MAX_ADB_INTEGER,
         })
         edges_out.write(json.dumps(e) + '\n')
