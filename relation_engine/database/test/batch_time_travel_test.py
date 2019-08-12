@@ -24,6 +24,24 @@ def arango_db():
 
     sys.delete_database(DB_NAME)
 
+def test_init_fail_bad_edge_collection(arango_db):
+    col_name = 'edge'
+    arango_db.create_collection(col_name)
+
+    try:
+        ArangoBatchTimeTravellingDB(arango_db, default_edge_collection=col_name)
+    except ValueError as e:
+        assert e.args[0] == 'edge is not an edge collection'
+
+def test_expire_edge_bad_edge_collection(arango_db):
+    col_name = 'edge'
+    arango_db.create_collection(col_name)
+
+    try:
+        ArangoBatchTimeTravellingDB(arango_db).expire_edge('k', 3, 'edge')
+    except ValueError as e:
+        assert e.args[0] == 'edge is not an edge collection'
+
 def test_get_vertex(arango_db):
     """
     Tests that getting a vertex returns the correct vertex. In particular checks for OB1 errors.
@@ -113,8 +131,10 @@ def test_save_vertex(arango_db):
     arango_db.create_collection(col_name)
     att = ArangoBatchTimeTravellingDB(arango_db, default_vertex_collection=col_name)
 
-    att.save_vertex('myid', 'load-ver1', 500, {'science': 'yes!'})
-    att.save_vertex('myid2', 'load-ver1', 600, {'science': 'yes indeed!'})
+    k = att.save_vertex('myid', 'load-ver1', 500, {'science': 'yes!'})
+    assert k == 'myid_load-ver1'
+    k = att.save_vertex('myid2', 'load-ver1', 600, {'science': 'yes indeed!'})
+    assert k == 'myid2_load-ver1'
 
     ret = att.get_vertex('myid', 600)
     assert ret == {'_key': 'myid_load-ver1',
@@ -146,19 +166,21 @@ def test_save_edge(arango_db):
     arango_db.create_collection(col_name, edge=True)
     att = ArangoBatchTimeTravellingDB(arango_db, default_edge_collection=col_name)
 
-    att.save_edge(
+    k = att.save_edge(
         'myid',
         {'id': 'whee', '_id': 'fake/1'},
         {'id': 'whoo', '_id': 'fake/2'},
         'load-ver1',
         500)
-    att.save_edge(
+    assert k == 'myid_load-ver1'
+    k = att.save_edge(
         'myid2',
         {'id': 'whee', '_id': 'fake/1'},
         {'id': 'whoo', '_id': 'fake/2'},
         'load-ver1',
         600,
         {'science': 'yes indeed!'})
+    assert k == 'myid2_load-ver1'
 
     ret = att.get_edge('myid', 600)
     assert ret == {'_key': 'myid_load-ver1',
@@ -222,7 +244,60 @@ def test_set_last_version_on_vertex(arango_db):
                    'last_version': 'load-ver1',
                    'science': 'yes!'}
 
-def _setup_set_node_expired(arango_db):
+def test_set_last_version_on_edge(arango_db):
+    """
+    Tests setting the `last_version` field on an edge, and specifically that the correct
+    edge is modified.
+    """
+
+    col_name = 'edges'
+    arango_db.create_collection(col_name, edge=True)
+    att = ArangoBatchTimeTravellingDB(arango_db, default_edge_collection=col_name)
+
+    key = att.save_edge(
+        'myid',
+        {'id': 'whee', '_id': 'fake/1'},
+        {'id': 'whoo', '_id': 'fake/2'},
+        'load-ver1',
+        500)
+    _ = att.save_edge(
+        'myid2',
+        {'id': 'whee', '_id': 'fake/1'},
+        {'id': 'whoo', '_id': 'fake/2'},
+        'load-ver1',
+        600,
+        {'science': 'yes indeed!'})
+
+    att.set_last_version_on_edge(key, 'load-ver42')
+
+    ret = att.get_edge('myid', 600)
+    assert ret == {'_key': 'myid_load-ver1',
+                   '_id': 'edges/myid_load-ver1',
+                   '_from': 'fake/1',
+                   '_to': 'fake/2',
+                   'from': 'whee',
+                   'to': 'whoo',
+                   'created': 500,
+                   'expired': 9007199254740991,
+                   'first_version': 'load-ver1',
+                   'id': 'myid',
+                   'last_version': 'load-ver42'}
+    
+    ret = att.get_edge('myid2', 600)
+    assert ret == {'_key': 'myid2_load-ver1',
+                   '_id': 'edges/myid2_load-ver1',
+                   '_from': 'fake/1',
+                   '_to': 'fake/2',
+                   'from': 'whee',
+                   'to': 'whoo',
+                   'created': 600,
+                   'expired': 9007199254740991,
+                   'first_version': 'load-ver1',
+                   'id': 'myid2',
+                   'last_version': 'load-ver1',
+                   'science': 'yes indeed!'}
+
+def _setup_expire_vertex(arango_db):
 
     vert_col_name = 'verts'
     edge1_col_name = 'edges1'
@@ -268,7 +343,7 @@ def _setup_set_node_expired(arango_db):
 
     return edges1, edges2
 
-def test_set_node_expired_single_vertex(arango_db):
+def test_expire_vertex_single_vertex(arango_db):
     """
     Tests that given a network of nodes and edges where the edges are in 2 collections and the
     nodes are in a single collection, expiring a single vertex without providing any edge
@@ -277,7 +352,7 @@ def test_set_node_expired_single_vertex(arango_db):
     See _setup_set_node_expired for the test setup.
     """
 
-    edges1, edges2 = _setup_set_node_expired(arango_db)
+    edges1, edges2 = _setup_expire_vertex(arango_db)
     att = ArangoBatchTimeTravellingDB(arango_db, default_vertex_collection='verts')
 
     att.expire_vertex('1', 500)
@@ -292,7 +367,7 @@ def test_set_node_expired_single_vertex(arango_db):
     _check_docs(arango_db, edges1, 'edges1')
     _check_docs(arango_db, edges2, 'edges2')
 
-def test_set_node_expired_vert_and_edges_one_collection(arango_db):
+def test_expire_vertex_vert_and_edges_one_collection(arango_db):
     """
     Tests that given a network of nodes and edges where the edges are in 2 collections and the
     nodes are in a single collection, expiring a single vertex where only one of the edge
@@ -303,7 +378,7 @@ def test_set_node_expired_vert_and_edges_one_collection(arango_db):
     See _setup_set_node_expired for the test setup.
     """
 
-    _, edges2 = _setup_set_node_expired(arango_db)
+    _, edges2 = _setup_expire_vertex(arango_db)
     att = ArangoBatchTimeTravellingDB(arango_db, default_vertex_collection='verts')
 
     att.expire_vertex('1', 500, ['edges1'])
@@ -328,7 +403,7 @@ def test_set_node_expired_vert_and_edges_one_collection(arango_db):
 
     _check_docs(arango_db, edges2, 'edges2')
 
-def test_set_node_expired_vert_and_edges_two_collections(arango_db):
+def test_expire_vertex_vert_and_edges_two_collections(arango_db):
     """
     Tests that given a network of nodes and edges where the edges are in 2 collections and the
     nodes are in a single collection, expiring a single vertex where both of the edge
@@ -339,7 +414,7 @@ def test_set_node_expired_vert_and_edges_two_collections(arango_db):
     See _setup_set_node_expired for the test setup.
     """
 
-    _setup_set_node_expired(arango_db)
+    _setup_expire_vertex(arango_db)
     att = ArangoBatchTimeTravellingDB(arango_db, default_vertex_collection='verts')
 
     att.expire_vertex('1', 500, ['edges1', 'edges2'])
@@ -372,6 +447,58 @@ def test_set_node_expired_vert_and_edges_two_collections(arango_db):
                'created': 100, 'expired': 9000}, 
               ]
     _check_docs(arango_db, e2_exp, 'edges2')
+
+def test_expire_edge(arango_db):
+    """
+    Tests expiring an edge, and specifically that the correct edge is modified.
+    """
+
+    col_name = 'edges'
+    arango_db.create_collection(col_name, edge=True)
+    att = ArangoBatchTimeTravellingDB(arango_db, default_edge_collection=col_name)
+
+    key = att.save_edge(
+        'myid',
+        {'id': 'whee', '_id': 'fake/1'},
+        {'id': 'whoo', '_id': 'fake/2'},
+        'load-ver1',
+        500)
+    _ = att.save_edge(
+        'myid2',
+        {'id': 'whee', '_id': 'fake/1'},
+        {'id': 'whoo', '_id': 'fake/2'},
+        'load-ver1',
+        600,
+        {'science': 'yes indeed!'})
+
+    att.expire_edge(key, 2000)
+
+    ret = att.get_edge('myid', 600)
+    assert ret == {'_key': 'myid_load-ver1',
+                   '_id': 'edges/myid_load-ver1',
+                   '_from': 'fake/1',
+                   '_to': 'fake/2',
+                   'from': 'whee',
+                   'to': 'whoo',
+                   'created': 500,
+                   'expired': 2000,
+                   'first_version': 'load-ver1',
+                   'id': 'myid',
+                   'last_version': 'load-ver1'}
+    
+    ret = att.get_edge('myid2', 600)
+    assert ret == {'_key': 'myid2_load-ver1',
+                   '_id': 'edges/myid2_load-ver1',
+                   '_from': 'fake/1',
+                   '_to': 'fake/2',
+                   'from': 'whee',
+                   'to': 'whoo',
+                   'created': 600,
+                   'expired': 9007199254740991,
+                   'first_version': 'load-ver1',
+                   'id': 'myid2',
+                   'last_version': 'load-ver1',
+                   'science': 'yes indeed!'}
 
 def _check_docs(arango_db, docs, collection):
     col = arango_db.collection(collection)

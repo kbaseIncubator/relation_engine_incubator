@@ -48,8 +48,27 @@ class ArangoBatchTimeTravellingDB:
           This can be overridden.
         """
         self._database = database
-        self._default_vertex_collection = default_vertex_collection
-        self._default_edge_collection = default_edge_collection
+        # for some reason I don't understand these collections count as False
+        self._has_vert_col = False
+        self._has_edge_col = False
+        if default_vertex_collection:
+            self._default_vertex_collection = self._database.collection(default_vertex_collection)
+            self._has_vert_col = True
+        else:
+            self._default_vertex_collection = None
+    
+        if default_edge_collection:
+            self._default_edge_collection = self._ensure_edge_col(default_edge_collection)
+            self._has_edge_col = True
+        else:
+            self._default_edge_collection = None
+
+    # if an edge is inserted into a non-edge collection _from and _to are silently dropped
+    def _ensure_edge_col(self, collection):
+        c = self._database.collection(collection)
+        if not c.properties()['edge']:
+            raise ValueError(f'{collection} is not an edge collection')
+        return c
 
     def get_vertex(self, id_, timestamp, vertex_collection=None):
         """
@@ -200,13 +219,26 @@ class ArangoBatchTimeTravellingDB:
 
         col.update({_FLD_KEY: key, _FLD_VER_LST: last_version}, silent=True)
 
+    def set_last_version_on_edge(self, key, last_version, edge_collection=None):
+        """
+        Set the last version field on a edge.
+
+        key - the key of the edge.
+        last_version - the version to set.
+        edge_collection - the collection name to query. If none is provided, the default will
+          be used.
+        """
+        col = self._get_edge_collection(edge_collection)
+
+        col.update({_FLD_KEY: key, _FLD_VER_LST: last_version}, silent=True)
+
     def expire_vertex(self, key, expiration_time, edge_collections=None, vertex_collection=None):
         """
         Sets the expiration time on a vertex and adjacent edges in the given collections.
 
-        key - the node key.
+        key - the vertex key.
         expiration_time - the time, in Unix epoch milliseconds, to set as the expiration time
-          on the node and any affected edges.
+          on the vertex and any affected edges.
         edge_collections - a list of names of collections that will be checked for connected
           edges.
         vertex_collection - the collection name to query. If none is provided, the default will
@@ -234,6 +266,20 @@ class ArangoBatchTimeTravellingDB:
             )
         col.update({_FLD_KEY: key, _FLD_EXPIRED: expiration_time}, silent=True)
 
+    def expire_edge(self, key, expiration_time, edge_collection=None):
+        """
+        Sets the expiration time on an edge in the given collections.
+
+        key - the edge key.
+        expiration_time - the time, in Unix epoch milliseconds, to set as the expiration time
+          on the edge.
+        edge_collection - the collection name to query. If none is provided, the default will
+          be used.
+
+        """
+        col = self._get_edge_collection(edge_collection)
+        col.update({_FLD_KEY: key, _FLD_EXPIRED: expiration_time}, silent=True)
+
     # mutates in place!
     def _clean(self, obj):
         for k in _INTERNAL_ARANGO_FIELDS:
@@ -244,14 +290,14 @@ class ArangoBatchTimeTravellingDB:
         # TODO handle no such collection
         if collection:
             return self._database.collection(collection)
-        if not self._default_vertex_collection:
+        if not self._has_vert_col:
             raise ValueError("No collection provided and no default specified")
-        return self._database.collection(self._default_vertex_collection)
+        return self._default_vertex_collection
 
     def _get_edge_collection(self, collection):
         # TODO handle no such collection
         if collection:
-            return self._database.collection(collection)
-        if not self._default_edge_collection:
+            return self._ensure_edge_col(collection)
+        if not self._has_edge_col:
             raise ValueError("No collection provided and no default specified")
-        return self._database.collection(self._default_edge_collection)
+        return self._default_edge_collection
