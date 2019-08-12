@@ -2,6 +2,8 @@
 Utilities for loading graph data into the relation engine.
 """
 
+# TODO tests
+
 import json
 import unicodedata
 

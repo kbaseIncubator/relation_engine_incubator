@@ -2,10 +2,12 @@
 Common code for dealing with NCBI taxonomy files.
 """
 
+# TODO tests
+
 import re
 import unicodedata
 from collections import defaultdict
-from relation_engine.load_utils import canonicalize
+from relation_engine.batchload.load_utils import canonicalize
 
 _CANONICAL_IGNORE_SET = {'et','al','and','or','the','a'}
 _SEP = r'\s\|\s?'
