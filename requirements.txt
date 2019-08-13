@@ -1,0 +1,2 @@
+# Note that some of the helper scripts require numpy, but that is not included here.
+python-arango==4.4.0
