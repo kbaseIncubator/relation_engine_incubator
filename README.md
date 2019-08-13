@@ -72,7 +72,7 @@ prior to inserting the edge into the appropriate collection.
 
 In the context of the RE, it is expected that the combination of an ID and a timestamp uniquely
 identifies a node or edge. Thus, for a particular ID the `created` -> `expired` range should not
-overlap.
+overlap for nodes in separate loads.
 
 #### CLI
 
@@ -102,8 +102,8 @@ For a delta loader:
     collection.
     * The delta loader does not support multiple node collections per graph.
   * If not using the `_collection` field to specify the collection to which an edge belongs for
-    all edges, the default edge collection **MUST** be sepecified. If the `_collection` field
-    is missing, the default edge collection will be used.
+    all edges, the default edge collection **MUST** be specified. If the `_collection` field
+    is missing for an edge, the default edge collection will be used.
 * Call `load_graph_delta` in `relation_engine/batchload/delta_load.py`.
   * If a merge provider is available, specify the provider and the merge edge collection in the
     `merge_information` argument.
