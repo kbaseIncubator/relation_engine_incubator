@@ -58,7 +58,9 @@ changes between the prior load and the current load, and retaining the prior loa
         type=int,
         required=True,
         help='the timestamp to be applied to the load, in unix epoch milliseconds. Any nodes ' +
-             'or edges created in this load will start to exist with this time stamp.')
+             'or edges created in this load will start to exist with this time stamp. ' +
+             'NOTE: the user is responsible for ensuring this timestamp is greater than any ' +
+             'other timestamps previously used to load data into the NCBI taxonomy DB.')
 
     return parser.parse_args()
 

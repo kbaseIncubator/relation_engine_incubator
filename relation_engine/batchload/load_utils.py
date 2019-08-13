@@ -51,7 +51,8 @@ def process_nodes(nodeprov, load_version, timestamp, nodes_out):
     Nodes are expected to have an 'id' field containing the node's unique ID.
 
     nodeprov - the node provider. This is an iterable that returns nodes represented as dicts.
-    load_version - the version of the load in which the nodes appear.
+    load_version - the version of the load in which the nodes appear. This is expected to be
+      unique per load.
     timestamp - the timestamp at which the nodes will begin to exist.
     nodes_out - a handle to the file where the nodes will be written.
     """
@@ -83,7 +84,8 @@ def process_edge(edge, node_collection, load_version, timestamp):
     edge - the edge as a dict.
     node_collection - the name of the collection in which the nodes associated with the edge
       reside. This is used to generate the _from and _to fields.
-    load_version - the version of the load in which the edge appears.
+    load_version - the version of the load in which the edge appears. This is expected to be
+      unique per load.
     timestamp - the timestamp at which the edge will begin to exist.
 
     Returns - the updated edge as a dict.
@@ -114,7 +116,8 @@ def process_edges(edgeprov, node_collection, load_version, timestamp, edges_out)
     edgeprov - the edge provider. This is an iterable that returns edges represented as dicts.
     node_collection - the name of the collection in which the nodes associated with the edges
       reside. This is used to generate the _from and _to fields.
-    load_version - the version of the load in which the edges appear.
+    load_version - the version of the load in which the edges appear. This is expected to be
+      unique per load.
     timestamp - the timestamp at which the edges will begin to exist.
     edges_out - a handle to the file where the edges will be written.
     """
