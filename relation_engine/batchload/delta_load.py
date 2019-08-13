@@ -99,7 +99,7 @@ def load_graph_delta(
     for e in edge_source:
         # could batch things up here if slow
         col = db.get_default_edge_collection()
-        if '_collection' in e:
+        if e.get('_collection'):
             col = e.pop('_collection')
             if col not in edge_collections:
                 raise ValueError(f'Collection {col} not in provided collection list')
