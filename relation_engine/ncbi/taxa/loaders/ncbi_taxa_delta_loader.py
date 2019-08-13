@@ -21,7 +21,6 @@ MERGED_IN_FILE = 'merged.dmp'
 
 def parse_args():
     # TODO support user / pwd for db
-    # TODO merge file & collection
     parser = argparse.ArgumentParser(description=
 """
 Load a NCBI taxonomy dump into an AragoDB time travelling database, calculating and applying the

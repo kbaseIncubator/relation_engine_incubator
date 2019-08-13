@@ -65,6 +65,40 @@ def process_nodes(nodeprov, load_version, timestamp, nodes_out):
             })
         nodes_out.write(json.dumps(n) + '\n')
 
+def process_edge(edge, node_collection, load_version, timestamp):
+    """
+    Note that this funtion modifies the edge argument in place.
+
+    Process a graph edge for a batch time travelling load.
+    Adds appropriate fields to the edge. 
+
+    This function is only suitable for the initial load in the time travelling database.
+    Further loads must use a delta load algorithm.
+
+    Edges are expected to have the following fields:
+    id - the edge's unique ID.
+    from - the unique ID of the vertex from where the edge originates.
+    to - the unique ID of the vertex where the edge terminates.
+
+    edge - the edge as a dict.
+    node_collection - the name of the collection in which the nodes associated with the edge
+      reside. This is used to generate the _from and _to fields.
+    load_version - the version of the load in which the edge appears.
+    timestamp - the timestamp at which the edge will begin to exist.
+
+    Returns - the updated edge as a dict.
+    """
+    edge.update({
+            '_key':             edge['id'] + '_' + load_version,
+            '_from':            node_collection + '/' + edge['from'] + '_' + load_version,
+            '_to':              node_collection + '/' + edge['to'] + '_' + load_version,
+            'first_version':    load_version,
+            'last_version':     load_version,
+            'created':          timestamp,
+            'expired':          _MAX_ADB_INTEGER,
+        })
+    return edge
+
 def process_edges(edgeprov, node_collection, load_version, timestamp, edges_out):
     """
     Process graph edges from a provider into a JSON load file for a batch time travelling load.
@@ -83,16 +117,7 @@ def process_edges(edgeprov, node_collection, load_version, timestamp, edges_out)
     load_version - the version of the load in which the edges appear.
     timestamp - the timestamp at which the edges will begin to exist.
     edges_out - a handle to the file where the edges will be written.
-    
     """
     for e in edgeprov:
-        e.update({
-            '_key':             e['id'] + '_' + load_version,
-            '_from':            node_collection + '/' + e['from'] + '_' + load_version,
-            '_to':              node_collection + '/' + e['to'] + '_' + load_version,
-            'first_version':    load_version,
-            'last_version':     load_version,
-            'created':          timestamp,
-            'expired':          _MAX_ADB_INTEGER,
-        })
+        e = process_edge(e, node_collection, load_version, timestamp)
         edges_out.write(json.dumps(e) + '\n')
