@@ -101,9 +101,6 @@ For a delta loader:
   * Optionally, create a merge edge provider
 * Create an instance of the `ArangoBatchTimeTravellingDB` class. This class is located in
   `relation_engine/batchload/time_travelling_database.py`
-  * The default vertex collection **MUST** be specified. All nodes will be saved to this
-    collection.
-    * The delta loader does not support multiple node collections per graph.
   * If not using the `_collection` field to specify the collection to which an edge belongs for
     all edges, the default edge collection **MUST** be specified. If the `_collection` field
     is missing for an edge, the default edge collection will be used.

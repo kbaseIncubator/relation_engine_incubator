@@ -74,7 +74,7 @@ def main():
     client = ArangoClient(protocol=url.scheme, host=url.hostname, port=url.port)
     attdb = ArangoBatchTimeTravellingDB(
         client.db(a.database, verify=True),
-        default_vertex_collection=a.node_collection,
+        a.node_collection,
         default_edge_collection=a.edge_collection)
 
     with open(nodes) as in1, open(names) as namesfile, open(nodes) as in2, open(merged) as merge:
