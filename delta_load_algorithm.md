@@ -94,12 +94,6 @@ The algorithm is based on
 
 ```
 
-def delete_node(nodekey):
-    # this may be possible in a single db update
-    for edge in get_edges_for_node_from_db(nodekey, timestamp):
-        set_edge_expiration_in_db(edge._from, edge._to, timestamp - 1)
-    set_node_expiration_in_db(nodekey, timestamp - 1)
-      
 def create_node(node):
     node._key = generate_key(...)
     node.first_version = version
@@ -129,7 +123,7 @@ def main():
             # of the new node and edges to be a transaction.
             # Since this is a batch load we don't worry about it. The whole load would have
             # to be a transaction to make the db stable during the load.
-            delete_node(existing._key)
+            set_node_expiration_in_db(existing._key, timestamp - 1)
             create_node(node)
         else:
             set_last_node_version_in_db(node._key, version) # mark node as extant in current load
@@ -146,13 +140,13 @@ def main():
                 # don't need to check whether the edge exists because the algorithm will never
                 # leave a node undeleted with an outgoing merge edge. If both nodes exist,
                 # there's no preexisting edge.
-                delete_node(merged._key)
+                set_node_expiration_in_db(merged._key, timestamp - 1)
                 create_edge(merged, merged_into, {type: merge})
         
     # since not all sources of graphs possess delete info, we figure it out ourselves
     # may be possible to do this in one query
     for node in find_extant_nodes_without_last_version_in_db(timestamp, version):
-        delete_node(node._key)
+        set_node_expiration_in_db(node._key, timestamp - 1)
       
 
     for edge in get_edges(edges_source)

@@ -261,25 +261,7 @@ class ArangoBatchTimeTravellingDB:
           be used.
 
         """
-        edge_collections = [] if not edge_collections else edge_collections
         col = self._get_vertex_collection(vertex_collection)
-        # filter out nulls or empty strings and fail early on missing collections
-        edge_names = [self._get_edge_collection(e).name for e in edge_collections if e]
-
-        # you can only do updates on one collection at once
-        for ec in edge_names:
-            self._database.aql.execute(
-            f"""
-            WITH @@vcol FOR v, e IN 1 ANY @start @@ecol
-                UPDATE e WITH {{{_FLD_EXPIRED}: @timestamp}} IN @@ecol
-
-            """,
-            bind_vars={'@vcol': col.name,
-                       '@ecol': ec,
-                       'start': col.name + '/' + key,
-                       'timestamp': expiration_time
-                       },
-            )
         col.update({_FLD_KEY: key, _FLD_EXPIRED: expiration_time}, silent=True)
 
     def expire_edge(self, key, expiration_time, edge_collection=None):

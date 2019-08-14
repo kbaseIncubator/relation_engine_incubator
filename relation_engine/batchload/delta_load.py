@@ -59,8 +59,6 @@ def load_graph_delta(
     edge_cols = []
     if db.get_default_edge_collection():
         edge_cols.append(db.get_default_edge_collection())
-    if merge_information:
-        edge_cols.append(merge_information[1])
     if edge_collections:
         edge_cols.extend(edge_collections)
     
@@ -71,7 +69,7 @@ def load_graph_delta(
         if not dbv:
             db.save_vertex(v[_ID], load_version, timestamp, v)
         elif not _special_equal(v, dbv):
-            db.expire_vertex(dbv[_KEY], timestamp - 1, edge_collections=edge_cols)
+            db.expire_vertex(dbv[_KEY], timestamp - 1)
             db.save_vertex(v[_ID], load_version, timestamp, v)
         else:
             # mark node as seen in this version
@@ -88,7 +86,7 @@ def load_graph_delta(
             # trying to figure out where to set the edge if nodes are deleted gets complicated,
             # so we don't worry about it for now.
             if dbmerged and dbtarget:
-                db.expire_vertex(dbmerged[_KEY], timestamp - 1, edge_collections=edge_cols)
+                db.expire_vertex(dbmerged[_KEY], timestamp - 1)
                 db.save_edge(m[_ID], dbmerged, dbtarget, load_version, timestamp,
                     edge_collection=merge_information[1])
 
@@ -126,14 +124,12 @@ def load_graph_delta(
         #     print(f'edge {count}')
 
     # print('del edges')
-    if merge_information:
-        edge_cols.remove(merge_information[1])
     for col in edge_cols:
         db.expire_extant_edges_without_last_version(
             timestamp - 1, load_version, edge_collection=col)
 
 # TODO these fields are shared between here and the database. Should probably put them somewhere in common.
-# same iwth the id and _key fields in the code above
+# same with the id and _key fields in the code above
 # arango db api is leaking a bit here, but the chance we're going to rewrite this for something
 # else is pretty tiny
 _SPECIAL_EQUAL_IGNORED_FIELDS = ['_id', _KEY, '_to', '_from', 'created', 'expired',
