@@ -10,6 +10,8 @@ a readme file with a name keyed to the script, or embedded in the script.
 
 * Much of the code is not well tested.
   * The delta loader in particular needs tests.
+  * Get tests to run in travis
+    * At least when the code is merged into the main RE repos.
 * Handling merge edges in the delta loader could be improved.
   * Merge edges are never expired.
   * Currently only handles merge edges where
