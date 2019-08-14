@@ -26,19 +26,45 @@ def arango_db():
 
 def test_get_vertex_collection(arango_db):
     arango_db.create_collection('v')
+    arango_db.create_collection('e', edge=True)
 
-    att = ArangoBatchTimeTravellingDB(arango_db, 'v')
+    att = ArangoBatchTimeTravellingDB(arango_db, 'v', default_edge_collection='e')
     assert att.get_vertex_collection() == 'v'
 
 def test_get_default_edge_collection(arango_db):
     arango_db.create_collection('v')
     arango_db.create_collection('e', edge=True)
 
-    att = ArangoBatchTimeTravellingDB(arango_db, 'v')
+    att = ArangoBatchTimeTravellingDB(arango_db, 'v', edge_collections=['e'])
     assert att.get_default_edge_collection() is None
 
     att = ArangoBatchTimeTravellingDB(arango_db, 'v', default_edge_collection='e')
     assert att.get_default_edge_collection() is 'e'
+
+def test_get_edge_collections(arango_db):
+    arango_db.create_collection('v')
+    arango_db.create_collection('e1', edge=True)
+    arango_db.create_collection('e2', edge=True)
+    arango_db.create_collection('e3', edge=True)
+
+    adbtt = ArangoBatchTimeTravellingDB(arango_db, 'v', default_edge_collection='e1')
+    assert adbtt.get_edge_collections() == ['e1']
+
+    adbtt = ArangoBatchTimeTravellingDB(arango_db, 'v', edge_collections=['e2', 'e2', 'e1'])
+    assert adbtt.get_edge_collections() == ['e1', 'e2']
+
+    adbtt = ArangoBatchTimeTravellingDB(arango_db, 'v', default_edge_collection='e3',
+        edge_collections=['e2', 'e2', 'e1', 'e3'])
+    assert adbtt.get_edge_collections() == ['e1', 'e2', 'e3']
+
+def test_init_fail_no_edge_collections(arango_db):
+    arango_db.create_collection('v')
+
+    try:
+        ArangoBatchTimeTravellingDB(arango_db, 'v')
+    except ValueError as e:
+        assert e.args[0] == 'At least one edge collection must be specified'
+
 
 def test_init_fail_bad_edge_collection(arango_db):
     arango_db.create_collection('v')
@@ -50,15 +76,44 @@ def test_init_fail_bad_edge_collection(arango_db):
     except ValueError as e:
         assert e.args[0] == 'edge is not an edge collection'
 
-def test_expire_edge_bad_edge_collection(arango_db):
-    arango_db.create_collection('v')
-    col_name = 'edge'
-    arango_db.create_collection(col_name)
-
     try:
-        ArangoBatchTimeTravellingDB(arango_db, 'v').expire_edge('k', 3, 'edge')
+        ArangoBatchTimeTravellingDB(arango_db, 'v', edge_collections=[col_name])
     except ValueError as e:
         assert e.args[0] == 'edge is not an edge collection'
+
+def test_fail_no_default_edge_collection(arango_db):
+    """
+    Really should test this for all methods but that seems like a lot of tests for the same
+    chunk of factored out code
+    """
+    arango_db.create_collection('v')
+    col_name = 'edge'
+    arango_db.create_collection(col_name, edge=True)
+    adbtt = ArangoBatchTimeTravellingDB(arango_db, 'v', edge_collections=[col_name])
+
+    try:
+        adbtt.get_edge('id', 3)
+    except ValueError as e:
+        assert e.args[0] == 'No default edge collection specified, must specify edge collection'
+
+def test_fail_no_such_edge_collection(arango_db):
+    """
+    Really should test this for all methods but that seems like a lot of tests for the same
+    chunk of factored out code
+
+    Also tests that duplicate collection names don't cause a problem
+    """
+    arango_db.create_collection('v')
+    arango_db.create_collection('e1', edge=True)
+    arango_db.create_collection('e2', edge=True)
+    arango_db.create_collection('e3', edge=True)
+    adbtt = ArangoBatchTimeTravellingDB(arango_db, 'v', default_edge_collection='e1',
+        edge_collections=['e2', 'e3', 'e2', 'e1'])
+
+    try:
+        adbtt.expire_edge('id', 3, 'e4')
+    except ValueError as e:
+        assert e.args[0] == 'Collection e4 was not registered at initialization'
 
 def test_get_vertex(arango_db):
     """
@@ -67,6 +122,7 @@ def test_get_vertex(arango_db):
 
     col_name = 'verts'
     col = arango_db.create_collection(col_name)
+    arango_db.create_collection('e', edge=True)
 
     # it's assumed that given an id and a timestamp there's <= 1 match in the collection
     col.import_bulk([{'_key': '1', 'id': 'foo', 'created': 100, 'expired': 600},
@@ -75,7 +131,7 @@ def test_get_vertex(arango_db):
                      {'_key': '4', 'id': 'bar', 'created': 301, 'expired': 400},
                      ])
 
-    att = ArangoBatchTimeTravellingDB(arango_db, col_name)
+    att = ArangoBatchTimeTravellingDB(arango_db, col_name, edge_collections=['e'])
 
     ret = att.get_vertex('bar', 201)
     assert ret == {'_key': '3', '_id': 'verts/3', 'id': 'bar', 'created': 201, 'expired': 300}
@@ -148,7 +204,8 @@ def test_save_vertex(arango_db):
 
     col_name = 'verts'
     arango_db.create_collection(col_name)
-    att = ArangoBatchTimeTravellingDB(arango_db, col_name)
+    arango_db.create_collection('e', edge=True)
+    att = ArangoBatchTimeTravellingDB(arango_db, col_name, default_edge_collection='e')
 
     k = att.save_vertex('myid', 'load-ver1', 500, {'science': 'yes!'})
     assert k == 'myid_load-ver1'
@@ -184,14 +241,15 @@ def test_save_edge(arango_db):
     arango_db.create_collection('v')
     col_name = 'edges'
     arango_db.create_collection(col_name, edge=True)
-    att = ArangoBatchTimeTravellingDB(arango_db, 'v', default_edge_collection=col_name)
+    att = ArangoBatchTimeTravellingDB(arango_db, 'v', edge_collections=[col_name])
 
     k = att.save_edge(
         'myid',
         {'id': 'whee', '_id': 'fake/1'},
         {'id': 'whoo', '_id': 'fake/2'},
         'load-ver1',
-        500)
+        500,
+        edge_collection=col_name)
     assert k == 'myid_load-ver1'
     k = att.save_edge(
         'myid2',
@@ -199,10 +257,11 @@ def test_save_edge(arango_db):
         {'id': 'whoo', '_id': 'fake/2'},
         'load-ver1',
         600,
-        {'science': 'yes indeed!'})
+        {'science': 'yes indeed!'},
+        edge_collection=col_name)
     assert k == 'myid2_load-ver1'
 
-    ret = att.get_edge('myid', 600)
+    ret = att.get_edge('myid', 600, edge_collection=col_name)
     assert ret == {'_key': 'myid_load-ver1',
                    '_id': 'edges/myid_load-ver1',
                    '_from': 'fake/1',
@@ -215,7 +274,7 @@ def test_save_edge(arango_db):
                    'id': 'myid',
                    'last_version': 'load-ver1'}
     
-    ret = att.get_edge('myid2', 600)
+    ret = att.get_edge('myid2', 600, edge_collection=col_name)
     assert ret == {'_key': 'myid2_load-ver1',
                    '_id': 'edges/myid2_load-ver1',
                    '_from': 'fake/1',
@@ -237,7 +296,8 @@ def test_set_last_version_on_vertex(arango_db):
 
     col_name = 'verts'
     arango_db.create_collection(col_name)
-    att = ArangoBatchTimeTravellingDB(arango_db, col_name)
+    arango_db.create_collection('e', edge=True)
+    att = ArangoBatchTimeTravellingDB(arango_db, col_name, edge_collections=['e'])
 
     key = att.save_vertex('myid', 'load-ver1', 500, {'science': 'yes!'})
     _ = att.save_vertex('myid1', 'load-ver1', 500, {'science': 'yes!'})
@@ -374,7 +434,7 @@ def test_expire_vertex_single_vertex(arango_db):
     """
 
     edges1, edges2 = _setup_expire_vertex(arango_db)
-    att = ArangoBatchTimeTravellingDB(arango_db, 'verts')
+    att = ArangoBatchTimeTravellingDB(arango_db, 'verts', edge_collections=['edges1', 'edges2'])
 
     att.expire_vertex('1', 500)
 
@@ -448,6 +508,7 @@ def test_expire_extant_vertices_without_last_version(arango_db):
     """
     col_name = 'verts'
     col = arango_db.create_collection(col_name)
+    arango_db.create_collection('e', edge=True)
 
     test_data = [
         {'_key': '0', 'id': 'baz', 'created': 100, 'expired': 300, 'last_version': '2'},
@@ -458,7 +519,7 @@ def test_expire_extant_vertices_without_last_version(arango_db):
         ]
     col.import_bulk(test_data)
 
-    att = ArangoBatchTimeTravellingDB(arango_db, col_name)
+    att = ArangoBatchTimeTravellingDB(arango_db, col_name, default_edge_collection='e')
 
     # test 1
     att.expire_extant_vertices_without_last_version(100, "2")
