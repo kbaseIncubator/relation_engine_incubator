@@ -248,7 +248,7 @@ class ArangoBatchTimeTravellingDB:
 
         col.update({_FLD_KEY: key, _FLD_VER_LST: last_version}, silent=True)
 
-    def expire_vertex(self, key, expiration_time, edge_collections=None, vertex_collection=None):
+    def expire_vertex(self, key, expiration_time, vertex_collection=None):
         """
         Sets the expiration time on a vertex and adjacent edges in the given collections.
 
