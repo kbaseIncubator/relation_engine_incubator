@@ -106,29 +106,30 @@ class ArangoBatchTimeTravellingDB:
         timestamp - the time at which the vertex must exist in Unix epoch milliseconds.
         """
         col_name = self._vertex_collection.name
-        return self._get_document(id_, timestamp, col_name)
+        docs = self._get_documents([id_], timestamp, col_name)
+        return None if not docs else docs[id_]
 
-    def _get_document(self, id_, timestamp, collection_name):
+    def _get_documents(self, ids, timestamp, collection_name):
         cur = self._database.aql.execute(
           f"""
           FOR d IN @@col
-              FILTER d.{_FLD_ID} == @id
-              FILTER d.{_FLD_EXPIRED} >= @timestamp && d.{_FLD_CREATED} <= @timestamp
+              FILTER d.{_FLD_ID} IN @ids
+              FILTER d.{_FLD_EXPIRED} >= @timestamp AND d.{_FLD_CREATED} <= @timestamp
               RETURN d
           """,
-          bind_vars={'id': id_, 'timestamp': timestamp, '@col': collection_name},
+          bind_vars={'ids': ids, 'timestamp': timestamp, '@col': collection_name},
           count=True
         )
-        if cur.count() > 1:
-            raise ValueError(f'db contains > 1 document for id {id_}, timestamp {timestamp}, ' +
-                             f'collection {collection_name}')
-        
+        ret = {}
         try:
-            d = self._clean(cur.pop())
-        except _CursorEmptyError as _:
-            d = None
-        cur.close()
-        return d
+            for d in cur:
+                if d[_FLD_ID] in ret:
+                    raise ValueError(f'db contains > 1 document for id {d[_FLD_ID]}, ' +
+                        f'timestamp {timestamp}, collection {collection_name}')
+                ret[d[_FLD_ID]] = self._clean(d)
+        finally:
+            cur.close(ignore_missing=True)
+        return ret
 
     def get_edge(self, id_, timestamp, edge_collection=None):
         """
@@ -142,8 +143,8 @@ class ArangoBatchTimeTravellingDB:
           be used.
         """
         col_name = self._get_edge_collection(edge_collection).name
-        return self._get_document(id_, timestamp, col_name)
-
+        docs = self._get_documents([id_], timestamp, col_name)
+        return None if not docs else docs[id_]
 
     def save_vertex(self, id_, version, created_time, data):
         """
