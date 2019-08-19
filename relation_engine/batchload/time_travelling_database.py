@@ -37,26 +37,20 @@ class ArangoBatchTimeTravellingDB:
 
     # may want to make this an NCBIRelationEngine interface, but pretty unlikely we'll switch...
 
-    def __init__(self, database, default_vertex_collection=None, default_edge_collection=None):
+    def __init__(self, database, vertex_collection, default_edge_collection=None):
         """
         Create the DB interface.
 
         database - the python_arango ArangoDB database containing the data to query or modify.
-        default_vertex_collection - the name of the collection to use for vertex operations.
-          This can be overridden.
+        vertex_collection - the name of the collection to use for vertex operations.
         default_edge_collection - the name of the collection to use for edge operations.
           This can be overridden.
         """
         self._database = database
-        # for some reason I don't understand these collections count as False
-        self._has_vert_col = False
-        self._has_edge_col = False
-        if default_vertex_collection:
-            self._default_vertex_collection = self._database.collection(default_vertex_collection)
-            self._has_vert_col = True
-        else:
-            self._default_vertex_collection = None
+        self._vertex_collection = self._database.collection(vertex_collection)
     
+        # for some reason I don't understand these collections count as False
+        self._has_edge_col = False
         if default_edge_collection:
             self._default_edge_collection = self._ensure_edge_col(default_edge_collection)
             self._has_edge_col = True
@@ -70,13 +64,11 @@ class ArangoBatchTimeTravellingDB:
             raise ValueError(f'{collection} is not an edge collection')
         return c
 
-    def get_default_vertex_collection(self):
-      """
-      Returns the name of the default vertex collection or None.
-      """
-      if not self._has_vert_col:
-          return None
-      return self._default_vertex_collection.name
+    def get_vertex_collection(self):
+        """
+        Returns the name of the vertex collection.
+        """
+        return self._vertex_collection.name
 
     def get_default_edge_collection(self):
       """
@@ -86,7 +78,7 @@ class ArangoBatchTimeTravellingDB:
           return None
       return self._default_edge_collection.name
 
-    def get_vertex(self, id_, timestamp, vertex_collection=None):
+    def get_vertex(self, id_, timestamp):
         """
         Get a vertex from a collection that exists at the given timestamp.
 
@@ -94,10 +86,8 @@ class ArangoBatchTimeTravellingDB:
 
         id_ - the ID of the vertex.
         timestamp - the time at which the vertex must exist in Unix epoch milliseconds.
-        vertex_collection - the collection name to query. If none is provided, the default will
-          be used.
         """
-        col_name = self._get_vertex_collection(vertex_collection).name
+        col_name = self._vertex_collection.name
         return self._get_document(id_, timestamp, col_name)
 
     def _get_document(self, id_, timestamp, collection_name):
@@ -137,7 +127,7 @@ class ArangoBatchTimeTravellingDB:
         return self._get_document(id_, timestamp, col_name)
 
 
-    def save_vertex(self, id_, version, created_time, data, vertex_collection=None):
+    def save_vertex(self, id_, version, created_time, data):
         """
         Save a vertex in the database.
 
@@ -152,13 +142,9 @@ class ArangoBatchTimeTravellingDB:
         created_time - the time at which the vertex should begin to exist in Unix epoch
           milliseconds.
         data - the vertex contents as a dict.
-        vertex_collection - the name of the collection to modify. If none is provided, the default
-          will be used.
 
         Returns the key for the vertex.
         """
-
-        col = self._get_vertex_collection(vertex_collection)
 
         # May want a bulk method
         data = dict(data) # make a copy and overwrite the old data variable
@@ -169,7 +155,7 @@ class ArangoBatchTimeTravellingDB:
         data[_FLD_CREATED] = created_time
         data[_FLD_EXPIRED] = _MAX_ADB_INTEGER
 
-        col.insert(data, silent=True)
+        self._vertex_collection.insert(data, silent=True)
         return data[_FLD_KEY]
 
     def save_edge(
@@ -222,18 +208,14 @@ class ArangoBatchTimeTravellingDB:
         col.insert(data, silent=True)
         return data[_FLD_KEY]
 
-    def set_last_version_on_vertex(self, key, last_version, vertex_collection=None):
+    def set_last_version_on_vertex(self, key, last_version):
         """
         Set the last version field on a vertex.
 
         key - the key of the vertex.
         last_version - the version to set.
-        vertex_collection - the collection name to query. If none is provided, the default will
-          be used.
         """
-        col = self._get_vertex_collection(vertex_collection)
-
-        col.update({_FLD_KEY: key, _FLD_VER_LST: last_version}, silent=True)
+        self._vertex_collection.update({_FLD_KEY: key, _FLD_VER_LST: last_version}, silent=True)
 
     def set_last_version_on_edge(self, key, last_version, edge_collection=None):
         """
@@ -248,21 +230,15 @@ class ArangoBatchTimeTravellingDB:
 
         col.update({_FLD_KEY: key, _FLD_VER_LST: last_version}, silent=True)
 
-    def expire_vertex(self, key, expiration_time, vertex_collection=None):
+    def expire_vertex(self, key, expiration_time):
         """
         Sets the expiration time on a vertex and adjacent edges in the given collections.
 
         key - the vertex key.
         expiration_time - the time, in Unix epoch milliseconds, to set as the expiration time
           on the vertex and any affected edges.
-        edge_collections - a list of names of collections that will be checked for connected
-          edges.
-        vertex_collection - the collection name to query. If none is provided, the default will
-          be used.
-
         """
-        col = self._get_vertex_collection(vertex_collection)
-        col.update({_FLD_KEY: key, _FLD_EXPIRED: expiration_time}, silent=True)
+        self._vertex_collection.update({_FLD_KEY: key, _FLD_EXPIRED: expiration_time}, silent=True)
 
     def expire_edge(self, key, expiration_time, edge_collection=None):
         """
@@ -279,11 +255,7 @@ class ArangoBatchTimeTravellingDB:
         col.update({_FLD_KEY: key, _FLD_EXPIRED: expiration_time}, silent=True)
 
     # may need to separate timestamp into find and expire timestamps, but YAGNI for now
-    def expire_extant_vertices_without_last_version(
-            self,
-            timestamp,
-            version,
-            vertex_collection=None):
+    def expire_extant_vertices_without_last_version(self, timestamp, version):
         """
         Expire all vertices that exist at the given timestamp where the last version field is 
         not equal to the given version. The expiration date will be the given timestamp.
@@ -291,10 +263,8 @@ class ArangoBatchTimeTravellingDB:
         timestamp - the timestamp to use to find extant vertices as well as the timestamp to use
           as the expiration date.
         version - the version required for the last version field for a vertex to avoid expiration.
-        vertex_collection - the collection name to query. If none is provided, the default will
-          be used.
         """
-        col_name = self._get_vertex_collection(vertex_collection).name
+        col_name = self._vertex_collection.name
         self._expire_extant_document_without_last_version(timestamp, version, col_name)
 
     # may need to separate timestamp into find and expire timestamps, but YAGNI for now
@@ -332,14 +302,6 @@ class ArangoBatchTimeTravellingDB:
         for k in _INTERNAL_ARANGO_FIELDS:
             del obj[k] 
         return obj
-
-    def _get_vertex_collection(self, collection):
-        # TODO handle no such collection
-        if collection:
-            return self._database.collection(collection)
-        if not self._has_vert_col:
-            raise ValueError("No collection provided and no default specified")
-        return self._default_vertex_collection
 
     def _get_edge_collection(self, collection):
         # TODO handle no such collection
