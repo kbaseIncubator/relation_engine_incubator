@@ -63,6 +63,15 @@ def test_init_fail_no_edge_collections(arango_db):
     _check_exception(lambda: ArangoBatchTimeTravellingDB(arango_db, 'v'), ValueError,
         'At least one edge collection must be specified')
 
+def test_init_fail_bad_vertex_collection(arango_db):
+    arango_db.create_collection('v')
+    arango_db.create_collection('e', edge=True)
+
+    _check_exception(
+        lambda: ArangoBatchTimeTravellingDB(arango_db, 'e', default_edge_collection='e'),
+        ValueError, 'e is not a vertex collection')
+
+
 def test_init_fail_bad_edge_collection(arango_db):
     arango_db.create_collection('v')
     col_name = 'edge'
@@ -70,13 +79,11 @@ def test_init_fail_bad_edge_collection(arango_db):
 
     _check_exception(
         lambda: ArangoBatchTimeTravellingDB(arango_db, 'v', default_edge_collection=col_name),
-        ValueError,
-        'edge is not an edge collection')
+        ValueError, 'edge is not an edge collection')
 
     _check_exception(
         lambda: ArangoBatchTimeTravellingDB(arango_db, 'v', edge_collections=[col_name]),
-        ValueError,
-        'edge is not an edge collection')
+        ValueError, 'edge is not an edge collection')
 
 def test_fail_no_default_edge_collection(arango_db):
     """

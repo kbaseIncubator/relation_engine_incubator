@@ -65,16 +65,16 @@ class ArangoBatchTimeTravellingDB:
         if not edgecols:
             raise ValueError("At least one edge collection must be specified")
         self._database = database
-        # TODO check vertex collection is vertex collection
-        self._vertex_collection = self._database.collection(vertex_collection)
+        self._vertex_collection = self._get_col(vertex_collection)
 
-        self._edgecols = {n: self._ensure_edge_col(n) for n in edgecols}
+        self._edgecols = {n: self._get_col(n, edge=True) for n in edgecols}
 
     # if an edge is inserted into a non-edge collection _from and _to are silently dropped
-    def _ensure_edge_col(self, collection):
+    def _get_col(self, collection, edge=False):
         c = self._database.collection(collection)
-        if not c.properties()['edge']: # this is a http call
-            raise ValueError(f'{collection} is not an edge collection')
+        if not c.properties()['edge'] is edge: # this is a http call
+            ctype = 'an edge' if edge else 'a vertex'
+            raise ValueError(f'{collection} is not {ctype} collection')
         return c
 
     def get_vertex_collection(self):
