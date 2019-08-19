@@ -20,7 +20,6 @@ def load_graph_delta(
         database,
         timestamp,
         load_version,
-        edge_collections=None,
         merge_information=None):
     """
     Loads a new version of a graph into a graph database, calculating the delta between the graphs
@@ -40,11 +39,6 @@ def load_graph_delta(
     timestamp - the timestamp, in Unix epoch milliseconds, when the load should be considered as
       active.
     load_version - a unique ID for this load - often the date of the data release.
-    edge_collections - the list of collections that may contain edges (other than merge edges).
-      This list must include any collection names specified by the _collection field in edges,
-      and is used to properly expire edges connected to expired vertices. If the only collection
-      used is the default collection from database.get_default_edge_collection() this argument
-      is not required.
     merge_information - a tuple with two entries:
       1) an iterator that produces edges as dicts that represent merges of vertices.
          An 'id' field is required that uniquely identifies the edge in this load (and any previous
@@ -54,13 +48,6 @@ def load_graph_delta(
       2) The name of the collection where merge edges should be stored.
     """
     db = database
-    # TODO spec edge collections in DB constructor & cache objects
-    # TODO check vertex default collection is not none, check edge_collections are edge collections
-    edge_cols = []
-    if db.get_default_edge_collection():
-        edge_cols.append(db.get_default_edge_collection())
-    if edge_collections:
-        edge_cols.extend(edge_collections)
     
     # count = 0
     for v in vertex_source:
@@ -96,11 +83,7 @@ def load_graph_delta(
     # count = 0
     for e in edge_source:
         # could batch things up here if slow
-        col = db.get_default_edge_collection()
-        if e.get('_collection'):
-            col = e.pop('_collection')
-            if col not in edge_collections:
-                raise ValueError(f'Collection {col} not in provided collection list')
+        col = e.pop('_collection') # if None, default collection will be used
         dbe = db.get_edge(e[_ID], timestamp, edge_collection=col)
         # The edge exists in the current load so its nodes must exist by now
         # Could cache these, may be fetching the same vertex over and over, but no guarantees
@@ -124,7 +107,7 @@ def load_graph_delta(
         #     print(f'edge {count}')
 
     # print('del edges')
-    for col in edge_cols:
+    for col in db.get_edge_collections():
         db.expire_extant_edges_without_last_version(
             timestamp - 1, load_version, edge_collection=col)
 

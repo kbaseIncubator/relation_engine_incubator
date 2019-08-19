@@ -104,12 +104,11 @@ For a delta loader:
   * If not using the `_collection` field to specify the collection to which an edge belongs for
     all edges, the default edge collection **MUST** be specified. If the `_collection` field
     is missing for an edge, the default edge collection will be used.
+  * If multiple edge collections are to be used, they must be provided in the `edge_collections`
+    argument. The default edge collection, if any, may be omitted from this list.
 * Call `load_graph_delta` in `relation_engine/batchload/delta_load.py`.
   * If a merge provider is available, specify the provider and the merge edge collection in the
     `merge_information` argument.
-  * If edge collections other than the default edge collection are to be used, they must be
-    provided in the `edge_collections` argument.
-    * NOTE: this argument may move to the `ArangoBatchTimeTravellingDB` class shortly.
 
 
 ## Testing

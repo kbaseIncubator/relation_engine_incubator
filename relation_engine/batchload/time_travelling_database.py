@@ -37,25 +37,37 @@ class ArangoBatchTimeTravellingDB:
 
     # may want to make this an NCBIRelationEngine interface, but pretty unlikely we'll switch...
 
-    def __init__(self, database, vertex_collection, default_edge_collection=None):
+    def __init__(
+            self,
+            database,
+            vertex_collection,
+            default_edge_collection=None,
+            edge_collections=None):
         """
         Create the DB interface.
 
         database - the python_arango ArangoDB database containing the data to query or modify.
         vertex_collection - the name of the collection to use for vertex operations.
-        default_edge_collection - the name of the collection to use for edge operations.
+        default_edge_collection - the name of the collection to use for edge operations by default.
           This can be overridden.
+        edge_collections - a list of any edge collections in the graph.
+          The collections are checked for existence and cached for performance reasons.
+
+        Specifying an edge collection in a method argument that is not in edge_collections or
+        is not the defalt collection will result in an error.
         """
+        self._default_edge_collection = default_edge_collection
+        edgecols = set()
+        if default_edge_collection:
+            edgecols.add(default_edge_collection)
+        if edge_collections:
+            edgecols.update(edge_collections)
+        if not edgecols:
+            raise ValueError("At least one edge collection must be specified")
         self._database = database
         self._vertex_collection = self._database.collection(vertex_collection)
-    
-        # for some reason I don't understand these collections count as False
-        self._has_edge_col = False
-        if default_edge_collection:
-            self._default_edge_collection = self._ensure_edge_col(default_edge_collection)
-            self._has_edge_col = True
-        else:
-            self._default_edge_collection = None
+
+        self._edgecols = {n: self._ensure_edge_col(n) for n in edgecols}
 
     # if an edge is inserted into a non-edge collection _from and _to are silently dropped
     def _ensure_edge_col(self, collection):
@@ -74,9 +86,14 @@ class ArangoBatchTimeTravellingDB:
       """
       Returns the name of the default vertex collection or None.
       """
-      if not self._has_edge_col:
-          return None
-      return self._default_edge_collection.name
+      return self._default_edge_collection
+
+    def get_edge_collections(self):
+        """
+        Returns the names of all the registered collections as a list, including the default
+        collection, if any.
+        """
+        return sorted(list(self._edgecols.keys()))
 
     def get_vertex(self, id_, timestamp):
         """
@@ -304,9 +321,11 @@ class ArangoBatchTimeTravellingDB:
         return obj
 
     def _get_edge_collection(self, collection):
-        # TODO handle no such collection
-        if collection:
-            return self._ensure_edge_col(collection)
-        if not self._has_edge_col:
-            raise ValueError("No collection provided and no default specified")
-        return self._default_edge_collection
+        if not collection:
+            if not self._default_edge_collection:
+                raise ValueError('No default edge collection specified, ' +
+                    'must specify edge collection')
+            return self._edgecols[self._default_edge_collection]
+        if collection not in self._edgecols:
+            raise ValueError(f'Collection {collection} was not registered at initialization')
+        return self._edgecols[collection]
