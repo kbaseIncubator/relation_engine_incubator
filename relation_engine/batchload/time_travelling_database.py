@@ -65,6 +65,7 @@ class ArangoBatchTimeTravellingDB:
         if not edgecols:
             raise ValueError("At least one edge collection must be specified")
         self._database = database
+        # TODO check vertex collection is vertex collection
         self._vertex_collection = self._database.collection(vertex_collection)
 
         self._edgecols = {n: self._ensure_edge_col(n) for n in edgecols}
@@ -72,7 +73,7 @@ class ArangoBatchTimeTravellingDB:
     # if an edge is inserted into a non-edge collection _from and _to are silently dropped
     def _ensure_edge_col(self, collection):
         c = self._database.collection(collection)
-        if not c.properties()['edge']:
+        if not c.properties()['edge']: # this is a http call
             raise ValueError(f'{collection} is not an edge collection')
         return c
 
@@ -163,15 +164,7 @@ class ArangoBatchTimeTravellingDB:
         Returns the key for the vertex.
         """
 
-        # May want a bulk method
-        data = dict(data) # make a copy and overwrite the old data variable
-        data[_FLD_KEY] = id_ + '_' + version
-        data[_FLD_ID] = id_
-        data[_FLD_VER_FST] = version
-        data[_FLD_VER_LST] = version
-        data[_FLD_CREATED] = created_time
-        data[_FLD_EXPIRED] = _MAX_ADB_INTEGER
-
+        data = _create_vertex(data, id_, version, created_time)
         self._vertex_collection.insert(data, silent=True)
         return data[_FLD_KEY]
 
@@ -206,22 +199,8 @@ class ArangoBatchTimeTravellingDB:
 
         Returns the key for the edge.
         """
+        data = _create_edge(id_, from_vertex, to_vertex, version, created_time, data)
         col = self._get_edge_collection(edge_collection)
-        data = {} if not data else data
-
-        # May want a bulk method
-        data = dict(data) # make a copy and overwrite the old data variable
-        data[_FLD_KEY] = id_ + '_' + version
-        data[_FLD_ID] = id_
-        data[_FLD_FROM] = from_vertex[_FLD_FULL_ID]
-        data[_FLD_FROM_ID] = from_vertex[_FLD_ID]
-        data[_FLD_TO] = to_vertex[_FLD_FULL_ID]
-        data[_FLD_TO_ID] = to_vertex[_FLD_ID]
-        data[_FLD_VER_FST] = version
-        data[_FLD_VER_LST] = version
-        data[_FLD_CREATED] = created_time
-        data[_FLD_EXPIRED] = _MAX_ADB_INTEGER
-
         col.insert(data, silent=True)
         return data[_FLD_KEY]
 
@@ -327,5 +306,112 @@ class ArangoBatchTimeTravellingDB:
                     'must specify edge collection')
             return self._edgecols[self._default_edge_collection]
         if collection not in self._edgecols:
-            raise ValueError(f'Collection {collection} was not registered at initialization')
+            raise ValueError(f'Edge collection {collection} was not registered at initialization')
         return self._edgecols[collection]
+
+    def get_batch_updater(self, edge_collection_name=None):
+        """
+        Get a batch updater for a collection. Updates can be added to the updater and then
+        applied at once.
+
+        edge_collection_name - the name of the edge collection that will be updated. If not
+          provided the vertex collection is used.
+
+        Returns a BatchUpdater.
+        """
+        if not edge_collection_name:
+            return BatchUpdater(self._vertex_collection, False)
+        return BatchUpdater(self._get_edge_collection(edge_collection_name), True)
+
+# TODO bulk get verts & edges
+
+class BatchUpdater:
+
+    def __init__(self, collection, edge=False):
+        """
+        Do not create this class directly - call ArangoBatchTimeTravellingDB.get_batch_updater().
+
+        This class is not thread safe.
+
+        Create a batch updater.
+
+        collection - the python-arango collection where updatees will be applied.
+        edge - True if the collection is an edge collection. Checking this property requires
+          an http call, and so providing the type is required.
+
+        Properties:
+        is_edge - True if the updater will update against an edge collection, false otherwise.
+        """
+        self._col = collection
+        self.is_edge = edge
+        self._updates = []
+
+    def get_collection(self):
+        """
+        Return the name of the collection to which updates will be applied.
+        """
+        return self._col.name
+
+    def create_vertex(self, id_, version, created_time, data):
+        """
+        Save a vertex in the database.
+
+        Note that only a shallow copy of the data is made before adding database fields. Modifying
+        embedded data structures may have unexpected results.
+
+        The _key field is generated from the id_ and version fields, which are expected to uniquely
+        identify a vertex.
+
+        id_ - the external ID of the vertex.
+        version - the version of the load as part of which the vertex is being created.
+        created_time - the time at which the vertex should begin to exist in Unix epoch
+          milliseconds.
+        data - the vertex contents as a dict.
+
+        Returns the key for the vertex.
+        """
+        if self.is_edge:
+            raise ValueError('Batch updater is configured for an edge collection')
+        vert = _create_vertex(data, id_, version, created_time)
+        self._updates.append(vert)
+        return vert[_FLD_KEY]
+
+    def update(self):
+        """
+        Apply the updates collected so far and clear the update list.
+        """
+        self._col.import_bulk(self._updates, on_duplicate="update")
+        self._updates.clear()
+
+def _create_vertex(data, id_, version, created_time):
+    data = dict(data) # make a copy and overwrite the old data variable
+    data[_FLD_KEY] = id_ + '_' + version
+    data[_FLD_ID] = id_
+    data[_FLD_VER_FST] = version
+    data[_FLD_VER_LST] = version
+    data[_FLD_CREATED] = created_time
+    data[_FLD_EXPIRED] = _MAX_ADB_INTEGER
+
+    return data
+
+def _create_edge(
+        id_,
+        from_vertex,
+        to_vertex,
+        version,
+        created_time,
+        data):
+    data = {} if not data else data
+
+    data = dict(data) # make a copy and overwrite the old data variable
+    data[_FLD_KEY] = id_ + '_' + version
+    data[_FLD_ID] = id_
+    data[_FLD_FROM] = from_vertex[_FLD_FULL_ID]
+    data[_FLD_FROM_ID] = from_vertex[_FLD_ID]
+    data[_FLD_TO] = to_vertex[_FLD_FULL_ID]
+    data[_FLD_TO_ID] = to_vertex[_FLD_ID]
+    data[_FLD_VER_FST] = version
+    data[_FLD_VER_LST] = version
+    data[_FLD_CREATED] = created_time
+    data[_FLD_EXPIRED] = _MAX_ADB_INTEGER
+    return data
