@@ -85,13 +85,13 @@ class ArangoBatchTimeTravellingDB:
 
     def get_default_edge_collection(self):
       """
-      Returns the name of the default vertex collection or None.
+      Returns the name of the default edge collection or None.
       """
       return self._default_edge_collection
 
     def get_edge_collections(self):
         """
-        Returns the names of all the registered collections as a list, including the default
+        Returns the names of all the registered edge collections as a list, including the default
         collection, if any.
         """
         return sorted(list(self._edgecols.keys()))
