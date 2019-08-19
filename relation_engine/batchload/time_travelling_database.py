@@ -328,8 +328,6 @@ class ArangoBatchTimeTravellingDB:
             return BatchUpdater(self._vertex_collection, False)
         return BatchUpdater(self._get_edge_collection(edge_collection_name), True)
 
-# TODO bulk get verts & edges
-
 class BatchUpdater:
 
     def __init__(self, collection, edge=False):
