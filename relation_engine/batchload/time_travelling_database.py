@@ -96,18 +96,20 @@ class ArangoBatchTimeTravellingDB:
         """
         return sorted(list(self._edgecols.keys()))
 
-    def get_vertex(self, id_, timestamp):
+    def get_vertices(self, ids, timestamp):
         """
-        Get a vertex from a collection that exists at the given timestamp.
+        Get vertices that exist at the given timestamp from a collection.
 
         A vertex ID and a timestamp uniquely identifies a vertex in a collection.
 
-        id_ - the ID of the vertex.
-        timestamp - the time at which the vertex must exist in Unix epoch milliseconds.
+        ids - the IDs of the vertices to get.
+        timestamp - the time at which the vertices must exist in Unix epoch milliseconds.
+
+        Returns a dict of vertex ID -> vertex. Missing vertices are not included and do not
+          cause an error.
         """
         col_name = self._vertex_collection.name
-        docs = self._get_documents([id_], timestamp, col_name)
-        return None if not docs else docs[id_]
+        return self._get_documents(ids, timestamp, col_name)
 
     def _get_documents(self, ids, timestamp, collection_name):
         cur = self._database.aql.execute(
@@ -131,20 +133,22 @@ class ArangoBatchTimeTravellingDB:
             cur.close(ignore_missing=True)
         return ret
 
-    def get_edge(self, id_, timestamp, edge_collection=None):
+    def get_edges(self, ids, timestamp, edge_collection=None):
         """
-        Get an edge from a collection that exists at the given timestamp.
+        Get edges that exist at the given timestamp from a collection.
 
         An edge ID and a timestamp uniquely identifies an edge in a collection.
 
-        id_ - the ID of the edge.
-        timestamp - the time at which the vertex must exist in Unix epoch milliseconds.
+        ids - the IDs of the edges to get.
+        timestamp - the time at which the edges must exist in Unix epoch milliseconds.
         edge_collection - the collection name to query. If none is provided, the default will
           be used.
+
+        Returns a dict of edge ID -> edge. Missing edges are not included and do not
+          cause an error.
         """
         col_name = self._get_edge_collection(edge_collection).name
-        docs = self._get_documents([id_], timestamp, col_name)
-        return None if not docs else docs[id_]
+        return self._get_documents(ids, timestamp, col_name)
 
     def save_vertex(self, id_, version, created_time, data):
         """
@@ -336,7 +340,7 @@ class BatchUpdater:
 
         Create a batch updater.
 
-        collection - the python-arango collection where updatees will be applied.
+        collection - the python-arango collection where updates will be applied.
         edge - True if the collection is an edge collection. Checking this property requires
           an http call, and so providing the type is required.
 

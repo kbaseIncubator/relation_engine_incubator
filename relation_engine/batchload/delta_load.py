@@ -52,7 +52,7 @@ def load_graph_delta(
     # count = 0
     for v in vertex_source:
         # could batch things up here if slow
-        dbv = db.get_vertex(v[_ID], timestamp)
+        dbv = db.get_vertices([v[_ID]], timestamp).get(v[_ID])
         if not dbv:
             db.save_vertex(v[_ID], load_version, timestamp, v)
         elif not _special_equal(v, dbv):
@@ -67,8 +67,8 @@ def load_graph_delta(
 
     if merge_information:
         for m in merge_information[0]:
-            dbmerged = db.get_vertex(m['from'], timestamp)
-            dbtarget = db.get_vertex(m['to'], timestamp)
+            dbmerged = db.get_vertices([m['from']], timestamp).get(m['from'])
+            dbtarget = db.get_vertices([m['to']], timestamp).get(m['to'])
             # only add the merge if nodes exist at this point
             # trying to figure out where to set the edge if nodes are deleted gets complicated,
             # so we don't worry about it for now.
@@ -84,12 +84,12 @@ def load_graph_delta(
     for e in edge_source:
         # could batch things up here if slow
         col = e.pop('_collection') # if None, default collection will be used
-        dbe = db.get_edge(e[_ID], timestamp, edge_collection=col)
+        dbe = db.get_edges([e[_ID]], timestamp, edge_collection=col).get(e[_ID])
         # The edge exists in the current load so its nodes must exist by now
         # Could cache these, may be fetching the same vertex over and over, but no guarantees
         # the same vertexes are repeated in a reasonable amount of time
-        from_ = db.get_vertex(e['from'], timestamp)
-        to = db.get_vertex(e['to'], timestamp)
+        from_ = db.get_vertices([e['from']], timestamp).get(e['from'])
+        to = db.get_vertices([e['to']], timestamp).get(e['to'])
         if dbe:
             if (not _special_equal(e, dbe) or
                     # these two conditions check whether the nodes the edge is attached to 
