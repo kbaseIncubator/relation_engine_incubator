@@ -406,6 +406,21 @@ class BatchUpdater:
         self._updates.append(edge)
         return edge[_FLD_KEY]
 
+    def set_last_version_on_vertex(self, key, last_version):
+        """
+        Set the last version field on a vertex or edge.
+
+        key - the key of the vertex or edge.
+        last_version - the version to set.
+        """
+        if self.is_edge:
+            raise ValueError('Batch updater is configured for an edge collection')
+        self._updates.append({_FLD_KEY: key, _FLD_VER_LST: last_version})
+
+    # TODO set ver on edge - requires _to and _from, which is lame
+
+    # TODO expire vertex/edge
+
     def update(self):
         """
         Apply the updates collected so far and clear the update list.
