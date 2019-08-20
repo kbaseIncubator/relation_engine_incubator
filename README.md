@@ -80,7 +80,8 @@ overlap for nodes in separate loads.
 #### CLI
 
 The CLI code takes user arguments (such as the load version and timestamp) and puts all the parts
-together to get the load to proceed. There are working implementations in `relation_engine/ncbi/taxa/loaders`.
+together to get the load to proceed. There are working implementations in
+`relation_engine/ncbi/taxa/loaders`.
 
 For a bulk loader:
 * There is a working implementation at `relation_engine/ncbi/taxa/loaders/ncbi_taxa_bulk_loader.py`
@@ -91,7 +92,8 @@ For a bulk loader:
 * Call `process_edges` in the same file to create an edge JSON file.
   * Alternatively, if edges are to be loaded into more than one collection, the `process_edge`
     function may be used to process edges individually. The CLI can then determine into which
-    file the edge is to be written. There is an example in `relation_engine/ncbi/test/ncbi_taxa_bulk_loader_multiple_edges.py`.
+    file the edge is to be written. There is an example in
+    `relation_engine/ncbi/test/ncbi_taxa_bulk_loader_multiple_edges.py`.
 
 For a delta loader:
 * There is a working implementation at
@@ -106,9 +108,10 @@ For a delta loader:
     is missing for an edge, the default edge collection will be used.
   * If multiple edge collections are to be used, they must be provided in the `edge_collections`
     argument. The default edge collection, if any, may be omitted from this list.
+  * If a merge provider is available, specify the merge collection in the `merge_collection`
+    argument.
 * Call `load_graph_delta` in `relation_engine/batchload/delta_load.py`.
-  * If a merge provider is available, specify the provider and the merge edge collection in the
-    `merge_information` argument.
+  * If a merge provider is available, specify the provider in the `merge_source` argument.
 
 
 ## Testing

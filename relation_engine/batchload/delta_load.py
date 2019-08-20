@@ -20,7 +20,7 @@ def load_graph_delta(
         database,
         timestamp,
         load_version,
-        merge_information=None):
+        merge_source=None):
     """
     Loads a new version of a graph into a graph database, calculating the delta between the graphs
     and expiring / creating new vertices and edges as neccessary.
@@ -39,13 +39,12 @@ def load_graph_delta(
     timestamp - the timestamp, in Unix epoch milliseconds, when the load should be considered as
       active.
     load_version - a unique ID for this load - often the date of the data release.
-    merge_information - a tuple with two entries:
-      1) an iterator that produces edges as dicts that represent merges of vertices.
+    merge_source - an iterator that produces edges as dicts that represent merges of vertices.
          An 'id' field is required that uniquely identifies the edge in this load (and any previous
          loads in which it exists). 'from' and 'to' fields are required that identify the vertices
          where the edge originates (the merged vertex) and terminates (the vertex the old vertex
-         was merged into.).
-      2) The name of the collection where merge edges should be stored.
+         was merged into). If merge_source is specified, the database must have a merge collection
+         specified.
     """
     db = database
     
@@ -65,8 +64,8 @@ def load_graph_delta(
         # if count % 1000 == 0:
         #     print(f'node {count}')
 
-    if merge_information:
-        for m in merge_information[0]:
+    if merge_source:
+        for m in merge_source:
             dbmerged = db.get_vertices([m['from']], timestamp).get(m['from'])
             dbtarget = db.get_vertices([m['to']], timestamp).get(m['to'])
             # only add the merge if nodes exist at this point
@@ -75,7 +74,7 @@ def load_graph_delta(
             if dbmerged and dbtarget:
                 db.expire_vertex(dbmerged[_KEY], timestamp - 1)
                 db.save_edge(m[_ID], dbmerged, dbtarget, load_version, timestamp,
-                    edge_collection=merge_information[1])
+                    edge_collection=db.get_merge_collection())
 
     # print('del nodes')
     db.expire_extant_vertices_without_last_version(timestamp - 1, load_version)

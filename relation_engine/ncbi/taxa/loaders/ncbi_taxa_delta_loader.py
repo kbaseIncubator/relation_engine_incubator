@@ -75,7 +75,8 @@ def main():
     attdb = ArangoBatchTimeTravellingDB(
         client.db(a.database, verify=True),
         a.node_collection,
-        default_edge_collection=a.edge_collection)
+        default_edge_collection=a.edge_collection,
+        merge_collection=a.merge_collection)
 
     with open(nodes) as in1, open(names) as namesfile, open(nodes) as in2, open(merged) as merge:
         nodeprov = NCBINodeProvider(namesfile, in1)
@@ -83,7 +84,7 @@ def main():
         merge = NCBIMergeProvider(merge)
 
         load_graph_delta(nodeprov, edgeprov, attdb, a.load_timestamp, a.load_version,
-            merge_information=(merge, a.merge_edge_collection))
+            merge_source=merge)
 
 if __name__  == '__main__':
     main()

@@ -42,7 +42,8 @@ class ArangoBatchTimeTravellingDB:
             database,
             vertex_collection,
             default_edge_collection=None,
-            edge_collections=None):
+            edge_collections=None,
+            merge_collection=None):
         """
         Create the DB interface.
 
@@ -52,10 +53,16 @@ class ArangoBatchTimeTravellingDB:
           This can be overridden.
         edge_collections - a list of any edge collections in the graph.
           The collections are checked for existence and cached for performance reasons.
+        merge_collection - a collection containing edges that indicate that a node has been 
+          merged into another node.
 
-        Specifying an edge collection in a method argument that is not in edge_collections or
-        is not the defalt collection will result in an error.
+        Specifying an edge collection in a method argument that is not in edge_collections,
+        is not the default edge collection, or is not the merge collection will result in an error.
         """
+        self._database = database
+        self._merge_collection = None
+        if merge_collection:
+            self._merge_collection = self._get_col(merge_collection, edge=True)
         self._default_edge_collection = default_edge_collection
         edgecols = set()
         if default_edge_collection:
@@ -64,7 +71,6 @@ class ArangoBatchTimeTravellingDB:
             edgecols.update(edge_collections)
         if not edgecols:
             raise ValueError("At least one edge collection must be specified")
-        self._database = database
         self._vertex_collection = self._get_col(vertex_collection)
 
         self._edgecols = {n: self._get_col(n, edge=True) for n in edgecols}
@@ -92,9 +98,16 @@ class ArangoBatchTimeTravellingDB:
     def get_edge_collections(self):
         """
         Returns the names of all the registered edge collections as a list, including the default
-        collection, if any.
+        edge collection, if any. Does not include the merge collection.
         """
         return sorted(list(self._edgecols.keys()))
+
+    def get_merge_collection(self):
+        """
+        Return the name of the merge collection or None if no merge collection was registered.
+        """
+        # for some reason is None works, just a check doesn't
+        return None if self._merge_collection is None else self._merge_collection.name
 
     def get_vertices(self, ids, timestamp):
         """
@@ -310,6 +323,9 @@ class ArangoBatchTimeTravellingDB:
                 raise ValueError('No default edge collection specified, ' +
                     'must specify edge collection')
             return self._edgecols[self._default_edge_collection]
+        # again doesn't work without the is not None part. Dunno why.
+        if self._merge_collection is not None and collection == self._merge_collection.name:
+            return self._merge_collection
         if collection not in self._edgecols:
             raise ValueError(f'Edge collection {collection} was not registered at initialization')
         return self._edgecols[collection]
