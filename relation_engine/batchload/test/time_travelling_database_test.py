@@ -257,6 +257,8 @@ def test_save_edge(arango_db):
 
     k = att.save_edge(
         'myid',
+        # these 'nodes' are cheating - normally they'd be pulled from the db and have many
+        # more fields, but I happen to know that just these two fields are needed.
         {'id': 'whee', '_id': 'fake/1'},
         {'id': 'whoo', '_id': 'fake/2'},
         'load-ver1',
@@ -749,6 +751,8 @@ def test_batch_create_edges(arango_db):
 
     key = b.create_edge(
         'id1',
+        # these 'nodes' are cheating - normally they'd be pulled from the db and have many
+        # more fields, but I happen to know that just these two fields are needed.
         {'id': 'whee', '_id': 'v/1'},
         {'id': 'whoo', '_id': 'v/2'},
         'ver1',
@@ -872,6 +876,8 @@ def test_batch_set_last_version_on_edge(arango_db):
     att = ArangoBatchTimeTravellingDB(arango_db, 'v', default_edge_collection='e')
     b = att.get_batch_updater('e')
 
+    # these 'edges' are cheating - normally they'd be pulled from the db and have many
+    # more fields, but I happen to know that just these fields are needed.
     b.set_last_version_on_edge({'_key': '1', '_from': 'v/2', '_to': 'v/1'}, '2')
     b.set_last_version_on_edge({'_key': '2', '_from': 'v/2', '_to': 'v/1'}, '2')
 
@@ -966,6 +972,8 @@ def test_batch_expire_edge(arango_db):
     att = ArangoBatchTimeTravellingDB(arango_db, 'v', default_edge_collection='e')
     b = att.get_batch_updater('e')
 
+    # these 'edges' are cheating - normally they'd be pulled from the db and have many
+    # more fields, but I happen to know that just these fields are needed.
     b.expire_edge({'_key': '1', '_from': 'v/2', '_to': 'v/1'}, 500)
     b.expire_edge({'_key': '2', '_from': 'v/2', '_to': 'v/1'}, 500)
 
