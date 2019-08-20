@@ -421,15 +421,16 @@ class BatchUpdater:
         edge - the edge to update. This must have been fetched from the database.
         last_version - the version to set.
         """
+        self._update_edge(edge, {_FLD_VER_LST: last_version})
+    
+    def _update_edge(self, edge, update):
         self._ensure_edge()
-        self._updates.append({
-            _FLD_KEY: edge[_FLD_KEY],
-            _FLD_VER_LST: last_version,
-            # this is really lame. Arango requires the _to and _from edges even when the
-            # document you're updating already has them.
-            _FLD_FROM: edge[_FLD_FROM],
-            _FLD_TO: edge[_FLD_TO]
-            })
+        update[_FLD_KEY] = edge[_FLD_KEY]
+        # this is really lame. Arango requires the _to and _from edges even when the
+        # document you're updating already has them.
+        update[_FLD_FROM] = edge[_FLD_FROM]
+        update[_FLD_TO] = edge[_FLD_TO]
+        self._updates.append(update)
 
     def expire_vertex(self, key, expiration_time):
         """
@@ -442,7 +443,15 @@ class BatchUpdater:
         self._ensure_vertex()
         self._updates.append({_FLD_KEY: key, _FLD_EXPIRED: expiration_time})
 
-    # TODO expire vertex/edge
+    def expire_edge(self, edge, expiration_time):
+        """
+        Sets the expiration time on an edge.
+
+        edge - the edge to update. This must have been fetched from the database.
+        expiration_time - the time, in Unix epoch milliseconds, to set as the expiration time
+          on the edge.
+        """
+        self._update_edge(edge, {_FLD_EXPIRED: expiration_time})
 
     def update(self):
         """
