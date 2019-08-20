@@ -688,7 +688,7 @@ def test_batch_create_vertices(arango_db):
     """
     Test creating 2 vertices in one batch.
     """
-    arango_db.create_collection('v')
+    col = arango_db.create_collection('v')
     arango_db.create_collection('e', edge=True)
     att = ArangoBatchTimeTravellingDB(arango_db, 'v', default_edge_collection='e')
     
@@ -699,6 +699,8 @@ def test_batch_create_vertices(arango_db):
 
     key = b.create_vertex('id2', 'ver2', 900, {'foo': 'bar1'})
     assert key == 'id2_ver2'
+
+    assert col.count() == 0 # no verts should've been created yet
 
     b.update()
 
@@ -722,7 +724,7 @@ def test_batch_create_vertices(arango_db):
     ]
     _check_docs(arango_db, expected, 'v')
 
-def test_batch_update_vertex_fail_not_vertex_collection(arango_db):
+def test_batch_create_vertex_fail_not_vertex_collection(arango_db):
     """
     Test failing to add a vertex to a batch updater as the batch updater is for edges.
     """
@@ -735,6 +737,76 @@ def test_batch_update_vertex_fail_not_vertex_collection(arango_db):
     _check_exception(lambda: b.create_vertex('i', 'v', 6, {}), ValueError,
         'Batch updater is configured for an edge collection')
 
+def test_batch_create_edges(arango_db):
+    """
+    Test creating 2 vertices in one batch.
+    """
+    col = arango_db.create_collection('v')
+    arango_db.create_collection('e', edge=True)
+    att = ArangoBatchTimeTravellingDB(arango_db, 'v', default_edge_collection='e')
+    
+    b = att.get_batch_updater('e')
+
+    key = b.create_edge(
+        'id1',
+        {'id': 'whee', '_id': 'v/1'},
+        {'id': 'whoo', '_id': 'v/2'},
+        'ver1',
+        800)
+    assert key == 'id1_ver1'
+
+    key = b.create_edge(
+        'id2',
+        {'id': 'whee2', '_id': 'v/3'},
+        {'id': 'whoo2', '_id': 'v/4'},
+        'ver2',
+        900,
+        {'foo': 'bar1'})
+    assert key == 'id2_ver2'
+
+    assert col.count() == 0 # no edges should've been created yet
+
+    b.update()
+
+    expected = [
+        {'_key': 'id1_ver1',
+         '_id': 'e/id1_ver1',
+         'from': 'whee',
+         '_from': 'v/1',
+         'to': 'whoo',
+         '_to': 'v/2',
+         'created': 800,
+         'expired': 9007199254740991,
+         'first_version': 'ver1',
+         'id': 'id1',
+         'last_version': 'ver1'},
+        {'_key': 'id2_ver2',
+         '_id': 'e/id2_ver2',
+         'from': 'whee2',
+         '_from': 'v/3',
+         'to': 'whoo2',
+         '_to': 'v/4',
+         'created': 900,
+         'expired': 9007199254740991,
+         'first_version': 'ver2',
+         'id': 'id2',
+         'last_version': 'ver2',
+         'foo': 'bar1'}
+    ]
+    _check_docs(arango_db, expected, 'e')
+
+def test_batch_create_edge_fail_not_edge_collection(arango_db):
+    """
+    Test failing to add a edge to a batch updater as the batch updater is for vertices.
+    """
+    arango_db.create_collection('v')
+    arango_db.create_collection('e', edge=True)
+    att = ArangoBatchTimeTravellingDB(arango_db, 'v', default_edge_collection='e')
+
+    b = att.get_batch_updater()
+
+    _check_exception(lambda: b.create_edge('i', {}, {}, 'v', 6, {}), ValueError,
+        'Batch updater is configured for a vertex collection')
 
 ####################################
 # Helper funcs

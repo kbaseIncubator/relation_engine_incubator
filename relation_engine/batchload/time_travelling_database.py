@@ -379,6 +379,33 @@ class BatchUpdater:
         self._updates.append(vert)
         return vert[_FLD_KEY]
 
+    def create_edge(self, id_, from_vertex, to_vertex, version, created_time, data=None):
+        """
+        Save an edge in the database.
+
+        Note that only a shallow copy of the data is made before adding database fields. Modifying
+        embedded data structures may have unexpected results.
+
+        The _key field is generated from the id_ and version fields, which are expected to uniquely
+        identify an edge.
+
+        id_ - the external ID of the edge.
+        from_vertex - the vertex where the edge originates. This vertex must have been fetched from
+          the database.
+        to_vertex - the vertex where the edge terminates. This vertex must have been fetched from
+          the database.
+        version - the version of the load as part of which the edge is being created.
+        created_time - the time at which the edge should begin to exist in Unix epoch milliseconds.
+        data - the edge contents as a dict.
+
+        Returns the key for the edge.
+        """
+        if not self.is_edge:
+            raise ValueError('Batch updater is configured for a vertex collection')
+        edge = _create_edge(id_, from_vertex, to_vertex, version, created_time, data)
+        self._updates.append(edge)
+        return edge[_FLD_KEY]
+
     def update(self):
         """
         Apply the updates collected so far and clear the update list.
