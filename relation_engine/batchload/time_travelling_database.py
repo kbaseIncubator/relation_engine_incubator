@@ -233,11 +233,11 @@ class ArangoBatchTimeTravellingDB:
 
     def expire_vertex(self, key, expiration_time):
         """
-        Sets the expiration time on a vertex and adjacent edges in the given collections.
+        Sets the expiration time on a vertex.
 
         key - the vertex key.
         expiration_time - the time, in Unix epoch milliseconds, to set as the expiration time
-          on the vertex and any affected edges.
+          on the vertex.
         """
         self._vertex_collection.update({_FLD_KEY: key, _FLD_EXPIRED: expiration_time}, silent=True)
 
@@ -373,8 +373,7 @@ class BatchUpdater:
 
         Returns the key for the vertex.
         """
-        if self.is_edge:
-            raise ValueError('Batch updater is configured for an edge collection')
+        self._ensure_vertex()
         vert = _create_vertex(data, id_, version, created_time)
         self._updates.append(vert)
         return vert[_FLD_KEY]
@@ -400,8 +399,7 @@ class BatchUpdater:
 
         Returns the key for the edge.
         """
-        if not self.is_edge:
-            raise ValueError('Batch updater is configured for a vertex collection')
+        self._ensure_edge()
         edge = _create_edge(id_, from_vertex, to_vertex, version, created_time, data)
         self._updates.append(edge)
         return edge[_FLD_KEY]
@@ -413,8 +411,7 @@ class BatchUpdater:
         key - the key of the vertex.
         last_version - the version to set.
         """
-        if self.is_edge:
-            raise ValueError('Batch updater is configured for an edge collection')
+        self._ensure_vertex()
         self._updates.append({_FLD_KEY: key, _FLD_VER_LST: last_version})
 
     def set_last_version_on_edge(self, edge, last_version):
@@ -424,18 +421,37 @@ class BatchUpdater:
         edge - the edge to update. This must have been fetched from the database.
         last_version - the version to set.
         """
-        if not self.is_edge:
-            raise ValueError('Batch updater is configured for a vertex collection')
-        self._updates.append({
-            _FLD_KEY: edge[_FLD_KEY],
-            _FLD_VER_LST: last_version,
-            # this is really lame. Arango requires the _to and _from edges even when the
-            # document you're updating already has them.
-            _FLD_FROM: edge[_FLD_FROM],
-            _FLD_TO: edge[_FLD_TO]
-            })
+        self._update_edge(edge, {_FLD_VER_LST: last_version})
+    
+    def _update_edge(self, edge, update):
+        self._ensure_edge()
+        update[_FLD_KEY] = edge[_FLD_KEY]
+        # this is really lame. Arango requires the _to and _from edges even when the
+        # document you're updating already has them.
+        update[_FLD_FROM] = edge[_FLD_FROM]
+        update[_FLD_TO] = edge[_FLD_TO]
+        self._updates.append(update)
 
-    # TODO expire vertex/edge
+    def expire_vertex(self, key, expiration_time):
+        """
+        Sets the expiration time on a vertex.
+
+        key - the vertex key.
+        expiration_time - the time, in Unix epoch milliseconds, to set as the expiration time
+          on the vertex.
+        """
+        self._ensure_vertex()
+        self._updates.append({_FLD_KEY: key, _FLD_EXPIRED: expiration_time})
+
+    def expire_edge(self, edge, expiration_time):
+        """
+        Sets the expiration time on an edge.
+
+        edge - the edge to update. This must have been fetched from the database.
+        expiration_time - the time, in Unix epoch milliseconds, to set as the expiration time
+          on the edge.
+        """
+        self._update_edge(edge, {_FLD_EXPIRED: expiration_time})
 
     def update(self):
         """
@@ -443,6 +459,14 @@ class BatchUpdater:
         """
         self._col.import_bulk(self._updates, on_duplicate="update")
         self._updates.clear()
+
+    def _ensure_vertex(self):
+        if self.is_edge:
+            raise ValueError('Batch updater is configured for an edge collection')
+
+    def _ensure_edge(self):
+        if not self.is_edge:
+            raise ValueError('Batch updater is configured for a vertex collection')
 
 def _create_vertex(data, id_, version, created_time):
     data = dict(data) # make a copy and overwrite the old data variable
