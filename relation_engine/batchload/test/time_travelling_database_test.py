@@ -902,6 +902,50 @@ def test_batch_set_last_version_on_edge_fail_not_edge_collection(arango_db):
     _check_exception(lambda: b.set_last_version_on_edge({}, '2'), ValueError,
         'Batch updater is configured for a vertex collection')
 
+def test_batch_expire_vertex(arango_db):
+    """
+    Test expiring vertices.
+    """
+    col = arango_db.create_collection('v')
+    arango_db.create_collection('e', edge=True)
+
+    expected = [{'_id': 'v/1', '_key': '1', 'id': 'foo', 'expired': 1000},
+                {'_id': 'v/2', '_key': '2', 'id': 'bar', 'expired': 1000},
+                {'_id': 'v/3', '_key': '3', 'id': 'baz', 'expired': 1000},
+                ]
+
+    col.import_bulk(expected)
+
+    att = ArangoBatchTimeTravellingDB(arango_db, 'v', default_edge_collection='e')
+    b = att.get_batch_updater()
+
+    b.expire_vertex('1', 500)
+    b.expire_vertex('2', 500)
+
+    _check_docs(arango_db, expected, 'v') # expect no changes
+
+    b.update()
+
+    expected = [{'_id': 'v/1', '_key': '1', 'id': 'foo', 'expired': 500},
+                {'_id': 'v/2', '_key': '2', 'id': 'bar', 'expired': 500},
+                {'_id': 'v/3', '_key': '3', 'id': 'baz', 'expired': 1000},
+                ]
+    _check_docs(arango_db, expected, 'v')
+
+def test_batch_expire_vertex_fail_not_vertex_collection(arango_db):
+    """
+    Test failing to expire a vertex in a batch updater as the batch updater is
+    for edges.
+    """
+    arango_db.create_collection('v')
+    arango_db.create_collection('e', edge=True)
+    att = ArangoBatchTimeTravellingDB(arango_db, 'v', default_edge_collection='e')
+
+    b = att.get_batch_updater('e')
+
+    _check_exception(lambda: b.expire_vertex('k', 1), ValueError,
+        'Batch updater is configured for an edge collection')
+
 ####################################
 # Helper funcs
 ####################################
