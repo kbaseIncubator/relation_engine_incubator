@@ -408,16 +408,32 @@ class BatchUpdater:
 
     def set_last_version_on_vertex(self, key, last_version):
         """
-        Set the last version field on a vertex or edge.
+        Set the last version field on a vertex.
 
-        key - the key of the vertex or edge.
+        key - the key of the vertex.
         last_version - the version to set.
         """
         if self.is_edge:
             raise ValueError('Batch updater is configured for an edge collection')
         self._updates.append({_FLD_KEY: key, _FLD_VER_LST: last_version})
 
-    # TODO set ver on edge - requires _to and _from, which is lame
+    def set_last_version_on_edge(self, edge, last_version):
+        """
+        Set the last version field on an edge.
+
+        edge - the edge to update. This must have been fetched from the database.
+        last_version - the version to set.
+        """
+        if not self.is_edge:
+            raise ValueError('Batch updater is configured for a vertex collection')
+        self._updates.append({
+            _FLD_KEY: edge[_FLD_KEY],
+            _FLD_VER_LST: last_version,
+            # this is really lame. Arango requires the _to and _from edges even when the
+            # document you're updating already has them.
+            _FLD_FROM: edge[_FLD_FROM],
+            _FLD_TO: edge[_FLD_TO]
+            })
 
     # TODO expire vertex/edge
 

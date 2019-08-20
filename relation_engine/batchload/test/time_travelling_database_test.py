@@ -852,41 +852,55 @@ def test_batch_set_last_version_on_vertex_fail_not_vertex_collection(arango_db):
     _check_exception(lambda: b.set_last_version_on_vertex('k', 'v'), ValueError,
         'Batch updater is configured for an edge collection')
 
-# def test_batch_set_last_version_on_edge(arango_db):
-#     """
-#     Test setting the last version on edges.
-#     """
-#     arango_db.create_collection('v')
-#     col = arango_db.create_collection('e', edge=True)
+def test_batch_set_last_version_on_edge(arango_db):
+    """
+    Test setting the last version on edges.
+    """
+    arango_db.create_collection('v')
+    col = arango_db.create_collection('e', edge=True)
 
-#     expected = [{'_id': 'e/1', '_key': '1', '_from': 'v/2', '_to': 'v/1', 'id': 'foo',
-#                  'last_version': '1'},
-#                 {'_id': 'e/2', '_key': '2', '_from': 'v/2', '_to': 'v/1', 'id': 'bar',
-#                  'last_version': '1'},
-#                 {'_id': 'e/3', '_key': '3', '_from': 'v/2', '_to': 'v/1', 'id': 'baz',
-#                  'last_version': '1'},
-#                 ]
+    expected = [{'_id': 'e/1', '_key': '1', '_from': 'v/2', '_to': 'v/1', 'id': 'foo',
+                 'last_version': '1'},
+                {'_id': 'e/2', '_key': '2', '_from': 'v/2', '_to': 'v/1', 'id': 'bar',
+                 'last_version': '1'},
+                {'_id': 'e/3', '_key': '3', '_from': 'v/2', '_to': 'v/1', 'id': 'baz',
+                 'last_version': '1'},
+                ]
 
-#     col.import_bulk(expected)
+    col.import_bulk(expected)
 
-#     att = ArangoBatchTimeTravellingDB(arango_db, 'v', default_edge_collection='e')
-#     b = att.get_batch_updater('e')
+    att = ArangoBatchTimeTravellingDB(arango_db, 'v', default_edge_collection='e')
+    b = att.get_batch_updater('e')
 
-#     b.set_last_version_on_vertex_or_edge('1', '2')
-#     b.set_last_version_on_vertex_or_edge('2', '2')
+    b.set_last_version_on_edge({'_key': '1', '_from': 'v/2', '_to': 'v/1'}, '2')
+    b.set_last_version_on_edge({'_key': '2', '_from': 'v/2', '_to': 'v/1'}, '2')
 
-#     _check_docs(arango_db, expected, 'e') # expect no changes
+    _check_docs(arango_db, expected, 'e') # expect no changes
 
-#     b.update()
+    b.update()
 
-#     expected = [{'_id': 'e/1', '_key': '1', '_from': 'v/2', '_to': 'v/1', 'id': 'foo',
-#                  'last_version': '2'},
-#                 {'_id': 'e/2', '_key': '2', '_from': 'v/2', '_to': 'v/1', 'id': 'bar',
-#                  'last_version': '2'},
-#                 {'_id': 'e/3', '_key': '3', '_from': 'v/2', '_to': 'v/1', 'id': 'baz',
-#                  'last_version': '1'},
-#                 ]
-#     _check_docs(arango_db, expected, 'e')
+    expected = [{'_id': 'e/1', '_key': '1', '_from': 'v/2', '_to': 'v/1', 'id': 'foo',
+                 'last_version': '2'},
+                {'_id': 'e/2', '_key': '2', '_from': 'v/2', '_to': 'v/1', 'id': 'bar',
+                 'last_version': '2'},
+                {'_id': 'e/3', '_key': '3', '_from': 'v/2', '_to': 'v/1', 'id': 'baz',
+                 'last_version': '1'},
+                ]
+    _check_docs(arango_db, expected, 'e')
+
+def test_batch_set_last_version_on_edge_fail_not_edge_collection(arango_db):
+    """
+    Test failing to set the last version on an edge in a batch updater as the batch updater is
+    for vertices.
+    """
+    arango_db.create_collection('v')
+    arango_db.create_collection('e', edge=True)
+    att = ArangoBatchTimeTravellingDB(arango_db, 'v', default_edge_collection='e')
+
+    b = att.get_batch_updater()
+
+    _check_exception(lambda: b.set_last_version_on_edge({}, '2'), ValueError,
+        'Batch updater is configured for a vertex collection')
 
 ####################################
 # Helper funcs
