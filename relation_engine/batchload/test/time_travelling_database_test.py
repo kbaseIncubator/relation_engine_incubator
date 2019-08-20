@@ -741,8 +741,8 @@ def test_batch_create_edges(arango_db):
     """
     Test creating 2 edges in one batch.
     """
-    col = arango_db.create_collection('v')
-    arango_db.create_collection('e', edge=True)
+    arango_db.create_collection('v')
+    col = arango_db.create_collection('e', edge=True)
     att = ArangoBatchTimeTravellingDB(arango_db, 'v', default_edge_collection='e')
     
     b = att.get_batch_updater('e')
