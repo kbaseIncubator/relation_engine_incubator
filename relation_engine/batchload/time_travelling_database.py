@@ -476,6 +476,12 @@ class BatchUpdater:
         self._col.import_bulk(self._updates, on_duplicate="update")
         self._updates.clear()
 
+    def count(self):
+        """
+        Get the number of pending updates.
+        """
+        return len(self._updates)
+
     def _ensure_vertex(self):
         if self.is_edge:
             raise ValueError('Batch updater is configured for an edge collection')

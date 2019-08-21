@@ -76,7 +76,7 @@ def main():
         client.db(a.database, verify=True),
         a.node_collection,
         default_edge_collection=a.edge_collection,
-        merge_collection=a.merge_collection)
+        merge_collection=a.merge_edge_collection)
 
     with open(nodes) as in1, open(names) as namesfile, open(nodes) as in2, open(merged) as merge:
         nodeprov = NCBINodeProvider(namesfile, in1)

@@ -729,10 +729,12 @@ def test_batch_noop_vertex(arango_db):
     b = att.get_batch_updater()
     assert b.get_collection() == 'v'
     assert b.is_edge is False
+    assert b.count() == 0
 
     b.update()
 
     assert col.count() == 0
+    assert b.count() == 0
 
 def test_batch_noop_edge(arango_db):
     """
@@ -750,10 +752,12 @@ def test_batch_noop_edge(arango_db):
     b = att.get_batch_updater(edge_collection_name='e')
     assert b.get_collection() == 'e'
     assert b.is_edge is True
+    assert b.count() == 0
 
     b.update()
 
     assert col.count() == 0
+    assert b.count() == 0
 
 def test_batch_noop_merge(arango_db):
     """
@@ -769,10 +773,12 @@ def test_batch_noop_merge(arango_db):
     b = att.get_batch_updater(edge_collection_name='m')
     assert b.get_collection() == 'm'
     assert b.is_edge is True
+    assert b.count() == 0
 
     b.update()
 
     assert col.count() == 0
+    assert b.count() == 0
     
 def test_batch_fail_get_batch_updater(arango_db):
     """
@@ -802,8 +808,10 @@ def test_batch_create_vertices(arango_db):
     assert key == 'id2_ver2'
 
     assert col.count() == 0 # no verts should've been created yet
+    assert b.count() == 2
 
     b.update()
+    assert b.count() == 0
 
     expected = [
         {'_key': 'id1_ver1',
@@ -868,8 +876,10 @@ def test_batch_create_edges(arango_db):
     assert key == 'id2_ver2'
 
     assert col.count() == 0 # no edges should've been created yet
+    assert b.count() == 2
 
     b.update()
+    assert b.count() == 0
 
     expected = [
         {'_key': 'id1_ver1',
@@ -923,8 +933,10 @@ def test_batch_create_mergeedge(arango_db):
     assert key == 'id1_ver1'
 
     assert col.count() == 0 # no edges should've been created yet
+    assert b.count() == 1
 
     b.update()
+    assert b.count() == 0
 
     expected = [
         {'_key': 'id1_ver1',
@@ -976,7 +988,10 @@ def test_batch_set_last_version_on_vertex(arango_db):
 
     _check_docs(arango_db, expected, 'v') # expect no changes
 
+    assert b.count() == 2
+
     b.update()
+    assert b.count() == 0
 
     expected = [{'_id': 'v/1', '_key': '1', 'id': 'foo', 'last_version': '2'},
                 {'_id': 'v/2', '_key': '2', 'id': 'bar', 'last_version': '2'},
@@ -1025,7 +1040,9 @@ def test_batch_set_last_version_on_edge(arango_db):
 
     _check_docs(arango_db, expected, 'e') # expect no changes
 
+    assert b.count() == 2
     b.update()
+    assert b.count() == 0
 
     expected = [{'_id': 'e/1', '_key': '1', '_from': 'v/2', '_to': 'v/1', 'id': 'foo',
                  'last_version': '2'},
@@ -1072,7 +1089,9 @@ def test_batch_expire_vertex(arango_db):
 
     _check_docs(arango_db, expected, 'v') # expect no changes
 
+    assert b.count() == 2
     b.update()
+    assert b.count() == 0
 
     expected = [{'_id': 'v/1', '_key': '1', 'id': 'foo', 'expired': 500},
                 {'_id': 'v/2', '_key': '2', 'id': 'bar', 'expired': 500},
@@ -1121,7 +1140,9 @@ def test_batch_expire_edge(arango_db):
 
     _check_docs(arango_db, expected, 'e') # expect no changes
 
+    assert b.count() == 2
     b.update()
+    assert b.count() == 0
 
     expected = [{'_id': 'e/1', '_key': '1', '_from': 'v/2', '_to': 'v/1', 'id': 'foo',
                  'expired': 500},
