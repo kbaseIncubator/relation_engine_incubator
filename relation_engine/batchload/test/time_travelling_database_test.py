@@ -57,11 +57,24 @@ def test_get_edge_collections(arango_db):
         edge_collections=['e2', 'e2', 'e1', 'e3'])
     assert adbtt.get_edge_collections() == ['e1', 'e2', 'e3']
 
+def test_get_merge_collection(arango_db):
+    arango_db.create_collection('v')
+    arango_db.create_collection('e', edge=True)
+    arango_db.create_collection('m', edge=True)
+
+    att = ArangoBatchTimeTravellingDB(arango_db, 'v', default_edge_collection='e')
+    assert att.get_merge_collection() is None
+
+    att = ArangoBatchTimeTravellingDB(
+        arango_db, 'v', default_edge_collection='e', merge_collection='m')
+    assert att.get_merge_collection() is 'm'
+
 def test_init_fail_no_edge_collections(arango_db):
     arango_db.create_collection('v')
+    arango_db.create_collection('m', edge=True)
 
-    _check_exception(lambda: ArangoBatchTimeTravellingDB(arango_db, 'v'), ValueError,
-        'At least one edge collection must be specified')
+    _check_exception(lambda: ArangoBatchTimeTravellingDB(arango_db, 'v', merge_collection='m'),
+        ValueError, 'At least one edge collection must be specified')
 
 def test_init_fail_bad_vertex_collection(arango_db):
     arango_db.create_collection('v')
@@ -84,6 +97,16 @@ def test_init_fail_bad_edge_collection(arango_db):
     _check_exception(
         lambda: ArangoBatchTimeTravellingDB(arango_db, 'v', edge_collections=[col_name]),
         ValueError, 'edge is not an edge collection')
+
+def test_init_fail_bad_merge_collection(arango_db):
+    arango_db.create_collection('v')
+    arango_db.create_collection('e', edge=True)
+    arango_db.create_collection('m')
+
+    _check_exception(
+        lambda: ArangoBatchTimeTravellingDB(
+            arango_db, 'v', default_edge_collection='e', merge_collection='m'),
+        ValueError, 'm is not an edge collection')
 
 def test_fail_no_default_edge_collection(arango_db):
     """
@@ -109,8 +132,18 @@ def test_fail_no_such_edge_collection(arango_db):
     arango_db.create_collection('e1', edge=True)
     arango_db.create_collection('e2', edge=True)
     arango_db.create_collection('e3', edge=True)
+    arango_db.create_collection('m', edge=True)
+
+    # without merge collection
     adbtt = ArangoBatchTimeTravellingDB(arango_db, 'v', default_edge_collection='e1',
         edge_collections=['e2', 'e3', 'e2', 'e1'])
+
+    _check_exception(lambda:  adbtt.expire_edge('id', 3, 'e4'), ValueError,
+        'Edge collection e4 was not registered at initialization')
+
+    # with merge collection
+    adbtt = ArangoBatchTimeTravellingDB(arango_db, 'v', default_edge_collection='e1',
+        edge_collections=['e2', 'e3', 'e2', 'e1'], merge_collection='m')
 
     _check_exception(lambda:  adbtt.expire_edge('id', 3, 'e4'), ValueError,
         'Edge collection e4 was not registered at initialization')
@@ -244,7 +277,6 @@ def test_save_vertex(arango_db):
                    'last_version': 'load-ver1',
                    'science': 'yes indeed!'}
 
-
 def test_save_edge(arango_db):
     """
     Tests saving an edge and retrieving the new edge.
@@ -301,6 +333,42 @@ def test_save_edge(arango_db):
                    'id': 'myid2',
                    'last_version': 'load-ver1',
                    'science': 'yes indeed!'}
+
+def test_save_merge_edge(arango_db):
+    """
+    Tests saving a merge edge and retrieving the new edge.
+
+    Could be tests for calling multiple methods on merge edges but that seems like overkill.
+    """
+
+    arango_db.create_collection('v')
+    arango_db.create_collection('e', edge=True)
+    arango_db.create_collection('m', edge=True)
+    att = ArangoBatchTimeTravellingDB(arango_db, 'v', edge_collections=['e'], merge_collection='m')
+
+    k = att.save_edge(
+        'myid',
+        # these 'nodes' are cheating - normally they'd be pulled from the db and have many
+        # more fields, but I happen to know that just these two fields are needed.
+        {'id': 'whee', '_id': 'fake/1'},
+        {'id': 'whoo', '_id': 'fake/2'},
+        'load-ver1',
+        500,
+        edge_collection='m')
+    assert k == 'myid_load-ver1'
+
+    ret = att.get_edges(['myid'], 600, edge_collection='m').get('myid')
+    assert ret == {'_key': 'myid_load-ver1',
+                   '_id': 'm/myid_load-ver1',
+                   '_from': 'fake/1',
+                   '_to': 'fake/2',
+                   'from': 'whee',
+                   'to': 'whoo',
+                   'created': 500,
+                   'expired': 9007199254740991,
+                   'first_version': 'load-ver1',
+                   'id': 'myid',
+                   'last_version': 'load-ver1'}
 
 def test_set_last_version_on_vertex(arango_db):
     """
@@ -466,12 +534,16 @@ def test_expire_vertex_single_vertex(arango_db):
 def test_expire_edge(arango_db):
     """
     Tests expiring an edge, and specifically that the correct edge is modified.
+
+    Also test that a merge collection doesn't change the results.
     """
 
     arango_db.create_collection('v')
     col_name = 'edges'
     arango_db.create_collection(col_name, edge=True)
-    att = ArangoBatchTimeTravellingDB(arango_db, 'v', default_edge_collection=col_name)
+    arango_db.create_collection('m', edge=True)
+    att = ArangoBatchTimeTravellingDB(
+        arango_db, 'v', default_edge_collection=col_name, merge_collection='m')
 
     key = att.save_edge(
         'myid',
@@ -577,10 +649,13 @@ def test_expire_extant_vertices_without_last_version(arango_db):
 def test_expire_extant_edges_without_last_version(arango_db):
     """
     Tests expiring egdes that exist at a specfic time without a given last version.
+
+    Also test that a merge collection doesn't change the results without a default edge collection.
     """
     arango_db.create_collection('v')
     col_name = 'edges'
     col = arango_db.create_collection(col_name, edge=True)
+    arango_db.create_collection('m', edge=True)
 
     test_data = [
         {'_key': '0', 'id': 'baz', 'created': 100, 'expired': 300, 'last_version': '2',
@@ -596,10 +671,11 @@ def test_expire_extant_edges_without_last_version(arango_db):
         ]
     col.import_bulk(test_data)
 
-    att = ArangoBatchTimeTravellingDB(arango_db, 'v', default_edge_collection=col_name)
+    att = ArangoBatchTimeTravellingDB(
+        arango_db, 'v', edge_collections=[col_name], merge_collection='m')
 
     # test 1
-    att.expire_extant_edges_without_last_version(100, "2")
+    att.expire_extant_edges_without_last_version(100, '2', edge_collection=col_name)
 
     expected = [
         {'_key': '0', '_id': 'edges/0', 'id': 'baz', 'created': 100, 'expired': 300,
@@ -620,7 +696,7 @@ def test_expire_extant_edges_without_last_version(arango_db):
     col.delete_match({})
     col.import_bulk(test_data)
 
-    att.expire_extant_edges_without_last_version(299, "1")
+    att.expire_extant_edges_without_last_version(299, '1', edge_collection=col_name)
 
     expected = [
         {'_key': '0', '_id': 'edges/0', 'id': 'baz', 'created': 100, 'expired': 299,
@@ -653,27 +729,56 @@ def test_batch_noop_vertex(arango_db):
     b = att.get_batch_updater()
     assert b.get_collection() == 'v'
     assert b.is_edge is False
+    assert b.count() == 0
 
     b.update()
 
     assert col.count() == 0
+    assert b.count() == 0
 
 def test_batch_noop_edge(arango_db):
     """
     Test that running an update on an edge collection with no updates does nothing.
 
     Also check collection name and collection type.
+
+    Also check that merge collection isn't picked up accidentally
     """
     arango_db.create_collection('v')
     col = arango_db.create_collection('e', edge=True)
-    att = ArangoBatchTimeTravellingDB(arango_db, 'v', default_edge_collection='e')
+    arango_db.create_collection('m', edge=True)
+    att = ArangoBatchTimeTravellingDB(
+        arango_db, 'v', default_edge_collection='e', merge_collection='m')
     b = att.get_batch_updater(edge_collection_name='e')
     assert b.get_collection() == 'e'
     assert b.is_edge is True
+    assert b.count() == 0
 
     b.update()
 
     assert col.count() == 0
+    assert b.count() == 0
+
+def test_batch_noop_merge(arango_db):
+    """
+    Test that running an update on a merge collection with no updates does nothing.
+
+    Also check collection name and collection type.
+    """
+    arango_db.create_collection('v')
+    arango_db.create_collection('e', edge=True)
+    col = arango_db.create_collection('m', edge=True)
+    att = ArangoBatchTimeTravellingDB(
+        arango_db, 'v', default_edge_collection='e', merge_collection='m')
+    b = att.get_batch_updater(edge_collection_name='m')
+    assert b.get_collection() == 'm'
+    assert b.is_edge is True
+    assert b.count() == 0
+
+    b.update()
+
+    assert col.count() == 0
+    assert b.count() == 0
     
 def test_batch_fail_get_batch_updater(arango_db):
     """
@@ -703,8 +808,10 @@ def test_batch_create_vertices(arango_db):
     assert key == 'id2_ver2'
 
     assert col.count() == 0 # no verts should've been created yet
+    assert b.count() == 2
 
     b.update()
+    assert b.count() == 0
 
     expected = [
         {'_key': 'id1_ver1',
@@ -769,8 +876,10 @@ def test_batch_create_edges(arango_db):
     assert key == 'id2_ver2'
 
     assert col.count() == 0 # no edges should've been created yet
+    assert b.count() == 2
 
     b.update()
+    assert b.count() == 0
 
     expected = [
         {'_key': 'id1_ver1',
@@ -798,6 +907,51 @@ def test_batch_create_edges(arango_db):
          'foo': 'bar1'}
     ]
     _check_docs(arango_db, expected, 'e')
+
+def test_batch_create_mergeedge(arango_db):
+    """
+    Test creating a merge edge in one batch.
+
+    Could be tests for calling multiple methods on merge edges but that seems like overkill.
+    """
+    arango_db.create_collection('v')
+    arango_db.create_collection('e', edge=True)
+    col = arango_db.create_collection('m', edge=True)
+    att = ArangoBatchTimeTravellingDB(
+        arango_db, 'v', default_edge_collection='e', merge_collection='m')
+    
+    b = att.get_batch_updater('m')
+
+    key = b.create_edge(
+        'id1',
+        # these 'nodes' are cheating - normally they'd be pulled from the db and have many
+        # more fields, but I happen to know that just these two fields are needed.
+        {'id': 'whee', '_id': 'v/1'},
+        {'id': 'whoo', '_id': 'v/2'},
+        'ver1',
+        800)
+    assert key == 'id1_ver1'
+
+    assert col.count() == 0 # no edges should've been created yet
+    assert b.count() == 1
+
+    b.update()
+    assert b.count() == 0
+
+    expected = [
+        {'_key': 'id1_ver1',
+         '_id': 'm/id1_ver1',
+         'from': 'whee',
+         '_from': 'v/1',
+         'to': 'whoo',
+         '_to': 'v/2',
+         'created': 800,
+         'expired': 9007199254740991,
+         'first_version': 'ver1',
+         'id': 'id1',
+         'last_version': 'ver1'}
+    ]
+    _check_docs(arango_db, expected, 'm')
 
 def test_batch_create_edge_fail_not_edge_collection(arango_db):
     """
@@ -834,7 +988,10 @@ def test_batch_set_last_version_on_vertex(arango_db):
 
     _check_docs(arango_db, expected, 'v') # expect no changes
 
+    assert b.count() == 2
+
     b.update()
+    assert b.count() == 0
 
     expected = [{'_id': 'v/1', '_key': '1', 'id': 'foo', 'last_version': '2'},
                 {'_id': 'v/2', '_key': '2', 'id': 'bar', 'last_version': '2'},
@@ -883,7 +1040,9 @@ def test_batch_set_last_version_on_edge(arango_db):
 
     _check_docs(arango_db, expected, 'e') # expect no changes
 
+    assert b.count() == 2
     b.update()
+    assert b.count() == 0
 
     expected = [{'_id': 'e/1', '_key': '1', '_from': 'v/2', '_to': 'v/1', 'id': 'foo',
                  'last_version': '2'},
@@ -930,7 +1089,9 @@ def test_batch_expire_vertex(arango_db):
 
     _check_docs(arango_db, expected, 'v') # expect no changes
 
+    assert b.count() == 2
     b.update()
+    assert b.count() == 0
 
     expected = [{'_id': 'v/1', '_key': '1', 'id': 'foo', 'expired': 500},
                 {'_id': 'v/2', '_key': '2', 'id': 'bar', 'expired': 500},
@@ -979,7 +1140,9 @@ def test_batch_expire_edge(arango_db):
 
     _check_docs(arango_db, expected, 'e') # expect no changes
 
+    assert b.count() == 2
     b.update()
+    assert b.count() == 0
 
     expected = [{'_id': 'e/1', '_key': '1', '_from': 'v/2', '_to': 'v/1', 'id': 'foo',
                  'expired': 500},
