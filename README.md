@@ -30,6 +30,15 @@ Theoretically, the delta loader could be used to load the first instance of the 
 but since it will perform numerous unnecessary queries against the database to do the graph
 comparison, the bulk loader is typically faster.
 
+## Requirements
+
+For the the delta loader to operate efficiently:
+
+* ArangoDB must be version 3.5.0+
+* All node and edge collections must have the following persistent indexes
+  * `id, expired, created`
+  * `expired, created, last_version`
+
 ### Creating new loaders
 
 Loaders for NCBI taxonomy are supplied in `relation_engine/ncbi/taxa/loaders` and can be examined
