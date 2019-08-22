@@ -1,8 +1,8 @@
-# TODO start a new arango instance as part of the tests so:
+# TODO TEST start a new arango instance as part of the tests so:
 # a) we remove chance of data corruption and 
 # b) we don't leave test data around
 
-# TODO more tests
+# TODO TEST more tests
 
 from relation_engine.batchload.time_travelling_database import ArangoBatchTimeTravellingDB
 from arango import ArangoClient

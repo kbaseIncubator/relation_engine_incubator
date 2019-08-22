@@ -11,9 +11,9 @@ take this into account and take measures to prevent it.
 from collections import defaultdict
 import time
 
-# TODO test
-# TODO document reserved fields that will be overwritten if supplied
-# TODO add notification callback so that the caller can implement % complete or logs or whatever based on what's happening in the delta load algorithm. Remove _VERBOSE prints at that point
+# TODO TEST
+# TODO DOCS document reserved fields that will be overwritten if supplied
+# TODO CODE add notification callback so that the caller can implement % complete or logs or whatever based on what's happening in the delta load algorithm. Remove _VERBOSE prints at that point
 
 # could consider threading / multiprocessing here. Virtually all the time is db access
 
@@ -184,7 +184,7 @@ def _process_edges(db, edge_source, timestamp, load_version):
                 print(f'  updating {b.count()} edges in {b.get_collection()}: {time.time()}')
             b.update()
 
-# TODO these fields are shared between here and the database. Should probably put them somewhere in common.
+# TODO CODE these fields are shared between here and the database. Should probably put them somewhere in common.
 # same with the id and _key fields in the code above
 # arango db api is leaking a bit here, but the chance we're going to rewrite this for something
 # else is pretty tiny

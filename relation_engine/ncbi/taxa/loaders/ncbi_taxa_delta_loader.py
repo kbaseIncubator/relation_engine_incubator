@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 
-# TODO tests
+# TODO TEST
 
 import argparse
 import os
@@ -20,7 +20,7 @@ NODES_IN_FILE = 'nodes.dmp'
 MERGED_IN_FILE = 'merged.dmp'
 
 def parse_args():
-    # TODO support user / pwd for db
+    # TODO AUTH support user / pwd for db
     parser = argparse.ArgumentParser(description=
 """
 Load a NCBI taxonomy dump into an AragoDB time travelling database, calculating and applying the
