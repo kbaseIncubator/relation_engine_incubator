@@ -17,7 +17,7 @@ import time
 
 # could consider threading / multiprocessing here. Virtually all the time is db access
 
-_VERBOSE = True
+_VERBOSE = False
 _ID = 'id'
 _KEY = '_key'
 
@@ -81,9 +81,9 @@ def _process_verts(db, vertex_source, timestamp, load_version):
         if _VERBOSE: print(f'vertex batch {count}: {time.time()}')
         count += 1
         keys = [v[_ID] for v in vertices]
-        if _VERBOSE: print(f'looking up {len(keys)} vertices: {time.time()}')
+        if _VERBOSE: print(f'  looking up {len(keys)} vertices: {time.time()}')
         dbverts = db.get_vertices(keys, timestamp)
-        if _VERBOSE: print(f'got {len(dbverts)} vertices: {time.time()}')
+        if _VERBOSE: print(f'  got {len(dbverts)} vertices: {time.time()}')
         bulk = db.get_batch_updater()
         for v in vertices:
             dbv = dbverts.get(v[_ID])
@@ -95,7 +95,7 @@ def _process_verts(db, vertex_source, timestamp, load_version):
             else:
                 # mark node as seen in this version
                 bulk.set_last_version_on_vertex(dbv[_KEY], load_version)
-        if _VERBOSE: print(f'updating {bulk.count()} vertices: {time.time()}')
+        if _VERBOSE: print(f'  updating {bulk.count()} vertices: {time.time()}')
         bulk.update()
 
 def _process_merges(db, merge_source, timestamp, load_version):
@@ -105,9 +105,9 @@ def _process_merges(db, merge_source, timestamp, load_version):
         if _VERBOSE: print(f'merge batch {count}: {time.time()}')
         count += 1
         keys = list({m['from'] for m in merges} | {m['to'] for m in merges})
-        if _VERBOSE: print(f'looking up {len(keys)} vertices: {time.time()}')
+        if _VERBOSE: print(f'  looking up {len(keys)} vertices: {time.time()}')
         dbverts = db.get_vertices(keys, timestamp)
-        if _VERBOSE: print(f'got {len(dbverts)} vertices: {time.time()}')
+        if _VERBOSE: print(f'  got {len(dbverts)} vertices: {time.time()}')
         bulk = db.get_batch_updater(db.get_merge_collection())
         vertbulk = db.get_batch_updater()
         for m in merges:
@@ -119,9 +119,9 @@ def _process_merges(db, merge_source, timestamp, load_version):
             if dbmerged and dbtarget:
                 vertbulk.expire_vertex(dbmerged[_KEY], timestamp - 1)
                 bulk.create_edge(m[_ID], dbmerged, dbtarget, load_version, timestamp)
-        if _VERBOSE: print(f'updating {bulk.count()} edges: {time.time()}')
+        if _VERBOSE: print(f'  updating {bulk.count()} edges: {time.time()}')
         bulk.update()
-        if _VERBOSE: print(f'updating {vertbulk.count()} vertices: {time.time()}')
+        if _VERBOSE: print(f'  updating {vertbulk.count()} vertices: {time.time()}')
         vertbulk.update()
 
 # assumes verts have been processed
@@ -146,16 +146,16 @@ def _process_edges(db, edge_source, timestamp, load_version):
                 bulkset[col] = db.get_batch_updater(col)
         dbedges = {}
         for col, keys in keys.items():
-            if _VERBOSE: print(f'looking up {len(keys)} edges in {col}: {time.time()}')
+            if _VERBOSE: print(f'  looking up {len(keys)} edges in {col}: {time.time()}')
             dbedges[col] = db.get_edges(keys, timestamp, edge_collection=col)
-            if _VERBOSE: print(f'got {len(dbedges[col])} edges: {time.time()}')
+            if _VERBOSE: print(f'  got {len(dbedges[col])} edges: {time.time()}')
         
         # Could cache these, may be fetching the same vertex over and over, but no guarantees
         # the same vertexes are repeated in a reasonable amount of time
         # Batching the fetch is probably enough
-        if _VERBOSE: print(f'looking up {len(vertkeys)} vertices: {time.time()}')
+        if _VERBOSE: print(f'  looking up {len(vertkeys)} vertices: {time.time()}')
         dbverts = db.get_vertices(list(vertkeys), timestamp)
-        if _VERBOSE: print(f'got {len(dbverts)} vertices: {time.time()}')
+        if _VERBOSE: print(f'  got {len(dbverts)} vertices: {time.time()}')
         keys = None
         vertkeys = None
 
@@ -181,7 +181,7 @@ def _process_edges(db, edge_source, timestamp, load_version):
                 bulk.create_edge(e[_ID], from_, to, load_version, timestamp, e)
         for b in bulkset.values():
             if _VERBOSE:
-                print(f'updating {b.count()} edges in {b.get_collection()}: {time.time()}')
+                print(f'  updating {b.count()} edges in {b.get_collection()}: {time.time()}')
             b.update()
 
 # TODO these fields are shared between here and the database. Should probably put them somewhere in common.
