@@ -172,6 +172,7 @@ def _process_edges(db, edge_source, timestamp, load_version, batch_size):
                 if (not _special_equal(e, dbe) or
                         # these two conditions check whether the nodes the edge is attached to 
                         # have been updated this load
+                        # This is an abstraction leak, bleah
                         dbe['_from'] != from_['_id'] or
                         dbe['_to'] != to['_id']):
                     bulk.expire_edge(dbe, timestamp - 1)
