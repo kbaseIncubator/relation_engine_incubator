@@ -9,6 +9,8 @@
 
 # TODO TEST add unit tests for the delta load algorithm with a db mock.
 
+# TODO NOW TEST merge tests
+
 from relation_engine.batchload.time_travelling_database import ArangoBatchTimeTravellingDB
 from relation_engine.batchload.delta_load import load_graph_delta
 from arango import ArangoClient
@@ -62,6 +64,14 @@ def _load_no_merge_source(arango_db, batchsize):
     e1col = arango_db.create_collection('e1', edge=True)
     e2col = arango_db.create_collection('e2', edge=True)
 
+    _import_bulk(
+        vcol,
+        [
+         {'id': 'expire', 'data': 'foo'},     # expired nodes shouldn't be touched
+         {'id': 'gap', 'data': 'super sweet'}, # even if reintroduced later
+        ],
+        100, 300, 'v0')
+
     # there are 2 update and 2 same nodes for the purposes of testing edge updates correctly
     _import_bulk(
         vcol,
@@ -72,7 +82,15 @@ def _load_no_merge_source(arango_db, batchsize):
          {'id': 'up1', 'data': {'old': 'data'}},  # will be updated
          {'id': 'up2', 'data': ['old', 'data']}   # will be updated
         ],
-        100, ADB_MAX_TIME, 'v1')
+        100, ADB_MAX_TIME, 'v0', 'v1')
+
+    _import_bulk(
+        def_ecol,
+        [
+         {'id': 'expire', 'from': 'expire', 'to': 'same2', 'data': 'foo'},  # shouldn't be touched
+         {'id': 'gap', 'from': 'gap', 'to': 'same1', 'data': 'bar'}         # ditto
+        ],
+        100, 300, 'v0', vert_col_name=vcol.name)
 
     _import_bulk(
         def_ecol,
@@ -80,7 +98,7 @@ def _load_no_merge_source(arango_db, batchsize):
          {'id': 'old', 'from': 'old', 'to': 'up1', 'data': 'foo'},  # will be deleted
          {'id': 'up1', 'from': 'same1', 'to': 'up1', 'data': 'bar'} # will be updated to new up1
         ],
-        100, ADB_MAX_TIME, 'v1', vert_col_name=vcol.name)
+        100, ADB_MAX_TIME, 'v0', 'v1', vert_col_name=vcol.name)
 
     _import_bulk(
         e1col,
@@ -88,7 +106,7 @@ def _load_no_merge_source(arango_db, batchsize):
          {'id': 'old', 'from': 'old', 'to': 'same1', 'data': 'baz'},    # will be deleted
          {'id': 'same', 'from': 'same1', 'to': 'same2', 'data': 'bing'} # no change
         ],
-        100, ADB_MAX_TIME, 'v1', vert_col_name=vcol.name)
+        100, ADB_MAX_TIME, 'v0', 'v1', vert_col_name=vcol.name)
 
     _import_bulk(
         e2col,
@@ -96,14 +114,14 @@ def _load_no_merge_source(arango_db, batchsize):
          {'id': 'change', 'from': 'same1', 'to': 'same2', 'data': 'baz'}, # will be updated
          {'id': 'up2', 'from': 'up2', 'to': 'same2', 'data': 'boof'}      # will be updated to up2
         ],
-        100, ADB_MAX_TIME, 'v1', vert_col_name=vcol.name)
+        100, ADB_MAX_TIME, 'v0', 'v1', vert_col_name=vcol.name)
 
     vsource = [
         {'id': 'same1', 'data': {'bar': 'baz'}}, # will not change
         {'id': 'same2', 'data': ['bar', 'baz']}, # will not change
         {'id': 'up1', 'data': {'new': 'data'}},  # will be updated based on data
         {'id': 'up2', 'data': ['old', 'data1']}, # will be updated based on data
-        {'id': 'new', 'data': 'super sweet'}     # new node
+        {'id': 'gap', 'data': 'super sweet'}     # new node
     ]
 
     esource = [
@@ -116,7 +134,7 @@ def _load_no_merge_source(arango_db, batchsize):
         # will be updated since up2 is updated.
         {'_collection': 'e2', 'id': 'up2', 'from': 'up2', 'to': 'same2', 'data': 'boof'},
         # new edge
-        {'_collection': 'def_e', 'id': 'new', 'from': 'new', 'to': 'same1', 'data': 'new'}
+        {'_collection': 'def_e', 'id': 'gap', 'from': 'gap', 'to': 'same1', 'data': 'bar'}
     ]
 
     db = ArangoBatchTimeTravellingDB(arango_db, 'v', default_edge_collection='def_e',
@@ -128,63 +146,77 @@ def _load_no_merge_source(arango_db, batchsize):
         load_graph_delta(vsource, esource, db, 500, 'v2')
 
     vexpected = [
-        {'id': 'old', '_key': 'old_v1', '_id': 'v/old_v1',
-         'first_version': 'v1', 'last_version': 'v1', 'created': 100, 'expired': 499,
+        {'id': 'expire', '_key': 'expire_v0', '_id': 'v/expire_v0',
+         'first_version': 'v0', 'last_version': 'v0', 'created': 100, 'expired': 300,
          'data': 'foo'},
-        {'id': 'same1', '_key': 'same1_v1', '_id': 'v/same1_v1',
-         'first_version': 'v1', 'last_version': 'v2', 'created': 100, 'expired': ADB_MAX_TIME,
+        {'id': 'gap', '_key': 'gap_v0', '_id': 'v/gap_v0',
+         'first_version': 'v0', 'last_version': 'v0', 'created': 100, 'expired': 300,
+         'data': 'super sweet'},
+        {'id': 'gap', '_key': 'gap_v2', '_id': 'v/gap_v2',
+         'first_version': 'v2', 'last_version': 'v2', 'created': 500, 'expired': ADB_MAX_TIME,
+         'data': 'super sweet'},
+        {'id': 'old', '_key': 'old_v0', '_id': 'v/old_v0',
+         'first_version': 'v0', 'last_version': 'v1', 'created': 100, 'expired': 499,
+         'data': 'foo'},
+        {'id': 'same1', '_key': 'same1_v0', '_id': 'v/same1_v0',
+         'first_version': 'v0', 'last_version': 'v2', 'created': 100, 'expired': ADB_MAX_TIME,
          'data': {'bar': 'baz'}},
-        {'id': 'same2', '_key': 'same2_v1', '_id': 'v/same2_v1',
-         'first_version': 'v1', 'last_version': 'v2', 'created': 100, 'expired': ADB_MAX_TIME,
+        {'id': 'same2', '_key': 'same2_v0', '_id': 'v/same2_v0',
+         'first_version': 'v0', 'last_version': 'v2', 'created': 100, 'expired': ADB_MAX_TIME,
          'data': ['bar', 'baz']},
-        {'id': 'up1', '_key': 'up1_v1', '_id': 'v/up1_v1',
-         'first_version': 'v1', 'last_version': 'v1', 'created': 100, 'expired': 499,
+        {'id': 'up1', '_key': 'up1_v0', '_id': 'v/up1_v0',
+         'first_version': 'v0', 'last_version': 'v1', 'created': 100, 'expired': 499,
          'data': {'old': 'data'}},
         {'id': 'up1', '_key': 'up1_v2', '_id': 'v/up1_v2',
          'first_version': 'v2', 'last_version': 'v2', 'created': 500, 'expired': ADB_MAX_TIME,
          'data': {'new': 'data'}},
-        {'id': 'up2', '_key': 'up2_v1', '_id': 'v/up2_v1',
-         'first_version': 'v1', 'last_version': 'v1', 'created': 100, 'expired': 499,
+        {'id': 'up2', '_key': 'up2_v0', '_id': 'v/up2_v0',
+         'first_version': 'v0', 'last_version': 'v1', 'created': 100, 'expired': 499,
          'data': ['old', 'data']},
         {'id': 'up2', '_key': 'up2_v2', '_id': 'v/up2_v2',
          'first_version': 'v2', 'last_version': 'v2', 'created': 500, 'expired': ADB_MAX_TIME,
          'data': ['old', 'data1']},
-        {'id': 'new', '_key': 'new_v2', '_id': 'v/new_v2',
-         'first_version': 'v2', 'last_version': 'v2', 'created': 500, 'expired': ADB_MAX_TIME,
-         'data': 'super sweet'}
     ]
 
     _check_docs(arango_db, vexpected, 'v')
 
     def_e_expected = [
+        {'id': 'expire', 'from': 'expire', 'to': 'same2',
+         '_key': 'expire_v0', '_id': 'def_e/expire_v0', '_from': 'v/expire_v0', '_to': 'v/same2_v0',
+         'first_version': 'v0', 'last_version': 'v0', 'created': 100, 'expired': 300,
+         'data': 'foo'},
+        {'id': 'gap', 'from': 'gap', 'to': 'same1',
+         '_key': 'gap_v0', '_id': 'def_e/gap_v0', '_from': 'v/gap_v0', '_to': 'v/same1_v0',
+         'first_version': 'v0', 'last_version': 'v0', 'created': 100, 'expired': 300,
+         'data': 'bar'},
+        {'id': 'gap', 'from': 'gap', 'to': 'same1',
+         '_key': 'gap_v2', '_id': 'def_e/gap_v2', '_from': 'v/gap_v2', '_to': 'v/same1_v0',
+         'first_version': 'v2', 'last_version': 'v2', 'created': 500, 'expired': ADB_MAX_TIME,
+         'data': 'bar'},
         {'id': 'old', 'from': 'old', 'to': 'up1',
-         '_key': 'old_v1', '_id': 'def_e/old_v1', '_from': 'v/old_v1', '_to': 'v/up1_v1',
-         'first_version': 'v1', 'last_version': 'v1', 'created': 100, 'expired': 499,
+         '_key': 'old_v0', '_id': 'def_e/old_v0', '_from': 'v/old_v0', '_to': 'v/up1_v0',
+         'first_version': 'v0', 'last_version': 'v1', 'created': 100, 'expired': 499,
          'data': 'foo'},
         {'id': 'up1', 'from': 'same1', 'to': 'up1',
-         '_key': 'up1_v1', '_id': 'def_e/up1_v1', '_from': 'v/same1_v1', '_to': 'v/up1_v1',
-         'first_version': 'v1', 'last_version': 'v1', 'created': 100, 'expired': 499,
+         '_key': 'up1_v0', '_id': 'def_e/up1_v0', '_from': 'v/same1_v0', '_to': 'v/up1_v0',
+         'first_version': 'v0', 'last_version': 'v1', 'created': 100, 'expired': 499,
          'data': 'bar'},
         {'id': 'up1', 'from': 'same1', 'to': 'up1',
-         '_key': 'up1_v2', '_id': 'def_e/up1_v2', '_from': 'v/same1_v1', '_to': 'v/up1_v2',
+         '_key': 'up1_v2', '_id': 'def_e/up1_v2', '_from': 'v/same1_v0', '_to': 'v/up1_v2',
          'first_version': 'v2', 'last_version': 'v2', 'created': 500, 'expired': ADB_MAX_TIME,
          'data': 'bar'},
-        {'id': 'new', 'from': 'new', 'to': 'same1',
-         '_key': 'new_v2', '_id': 'def_e/new_v2', '_from': 'v/new_v2', '_to': 'v/same1_v1',
-         'first_version': 'v2', 'last_version': 'v2', 'created': 500, 'expired': ADB_MAX_TIME,
-         'data': 'new'}
     ]
 
     _check_docs(arango_db, def_e_expected, 'def_e')
 
     e1_expected = [
         {'id': 'old', 'from': 'old', 'to': 'same1',
-         '_key': 'old_v1', '_id': 'e1/old_v1', '_from': 'v/old_v1', '_to': 'v/same1_v1',
-         'first_version': 'v1', 'last_version': 'v1', 'created': 100, 'expired': 499,
+         '_key': 'old_v0', '_id': 'e1/old_v0', '_from': 'v/old_v0', '_to': 'v/same1_v0',
+         'first_version': 'v0', 'last_version': 'v1', 'created': 100, 'expired': 499,
          'data': 'baz'},
         {'id': 'same', 'from': 'same1', 'to': 'same2',
-         '_key': 'same_v1', '_id': 'e1/same_v1', '_from': 'v/same1_v1', '_to': 'v/same2_v1',
-         'first_version': 'v1', 'last_version': 'v2', 'created': 100, 'expired': ADB_MAX_TIME,
+         '_key': 'same_v0', '_id': 'e1/same_v0', '_from': 'v/same1_v0', '_to': 'v/same2_v0',
+         'first_version': 'v0', 'last_version': 'v2', 'created': 100, 'expired': ADB_MAX_TIME,
          'data': 'bing'},
     ]
 
@@ -192,19 +224,19 @@ def _load_no_merge_source(arango_db, batchsize):
 
     e2_expected = [
         {'id': 'change', 'from': 'same1', 'to': 'same2',
-         '_key': 'change_v1', '_id': 'e2/change_v1', '_from': 'v/same1_v1', '_to': 'v/same2_v1',
-         'first_version': 'v1', 'last_version': 'v1', 'created': 100, 'expired': 499,
+         '_key': 'change_v0', '_id': 'e2/change_v0', '_from': 'v/same1_v0', '_to': 'v/same2_v0',
+         'first_version': 'v0', 'last_version': 'v1', 'created': 100, 'expired': 499,
          'data': 'baz'},
         {'id': 'change', 'from': 'same1', 'to': 'same2',
-         '_key': 'change_v2', '_id': 'e2/change_v2', '_from': 'v/same1_v1', '_to': 'v/same2_v1',
+         '_key': 'change_v2', '_id': 'e2/change_v2', '_from': 'v/same1_v0', '_to': 'v/same2_v0',
          'first_version': 'v2', 'last_version': 'v2', 'created': 500, 'expired': ADB_MAX_TIME,
          'data': 'boo'},
         {'id': 'up2', 'from': 'up2', 'to': 'same2',
-         '_key': 'up2_v1', '_id': 'e2/up2_v1', '_from': 'v/up2_v1', '_to': 'v/same2_v1',
-         'first_version': 'v1', 'last_version': 'v1', 'created': 100, 'expired': 499,
+         '_key': 'up2_v0', '_id': 'e2/up2_v0', '_from': 'v/up2_v0', '_to': 'v/same2_v0',
+         'first_version': 'v0', 'last_version': 'v1', 'created': 100, 'expired': 499,
          'data': 'boof'},
         {'id': 'up2', 'from': 'up2', 'to': 'same2',
-         '_key': 'up2_v2', '_id': 'e2/up2_v2', '_from': 'v/up2_v2', '_to': 'v/same2_v1',
+         '_key': 'up2_v2', '_id': 'e2/up2_v2', '_from': 'v/up2_v2', '_to': 'v/same2_v0',
          'first_version': 'v2', 'last_version': 'v2', 'created': 500, 'expired': ADB_MAX_TIME,
          'data': 'boof'},
     ]
@@ -213,16 +245,24 @@ def _load_no_merge_source(arango_db, batchsize):
 
 # modifies docs in place!
 # vert_col_name != None implies and edge
-def _import_bulk(col, docs, created, expired, version, vert_col_name=None):
+def _import_bulk(
+        col,
+        docs,
+        created,
+        expired,
+        first_version,
+        last_version=None,
+        vert_col_name=None):
+    last_version = last_version if last_version else first_version
     for d in docs:
-        d['_key'] = d['id'] + '_' + version
+        d['_key'] = d['id'] + '_' + first_version
         if vert_col_name:
-            d['_from'] = vert_col_name + '/' + d['from'] + '_' + version
-            d['_to'] = vert_col_name + '/' + d['to'] + '_' + version
+            d['_from'] = vert_col_name + '/' + d['from'] + '_' + first_version
+            d['_to'] = vert_col_name + '/' + d['to'] + '_' + first_version
         d['created'] = created
         d['expired'] = expired
-        d['first_version'] = version
-        d['last_version'] = version
+        d['first_version'] = first_version
+        d['last_version'] = last_version
     col.import_bulk(docs)
 
 def _check_exception(action, exception, message):
