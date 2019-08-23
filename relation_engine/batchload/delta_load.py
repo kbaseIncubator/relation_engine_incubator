@@ -76,6 +76,10 @@ def load_graph_delta(
             timestamp - 1, load_version, edge_collection=col)
 
 def _process_verts(db, vertex_source, timestamp, load_version, batch_size):
+    """
+    For each vertex we're importing, either replace and expire an existing vertex, create a
+    new vertex, or leave an existing vertex unchanged, updating its version.
+    """
     count = 1
     for vertgen in _chunkiter(vertex_source, batch_size):
         vertices = list(vertgen)
@@ -100,6 +104,12 @@ def _process_verts(db, vertex_source, timestamp, load_version, batch_size):
         bulk.update()
 
 def _process_merges(db, merge_source, timestamp, load_version, batch_size):
+    """
+    For each merge edge, if both vertices exist in the current graph (it is expected that vertices
+    have been updated by _process_verts), add the merge edge to the database.
+
+    This could be made smarter in the future.
+    """
     count = 1
     for mergen in _chunkiter(merge_source, batch_size):
         merges = list(mergen)
@@ -127,6 +137,10 @@ def _process_merges(db, merge_source, timestamp, load_version, batch_size):
 
 # assumes verts have been processed
 def _process_edges(db, edge_source, timestamp, load_version, batch_size):
+    """
+    For each edge we're importing, either replace and expire an existing edge, create a
+    new edge, or leave an existing edge unchanged, updating its version.
+    """
     count = 1
     for edgegen in _chunkiter(edge_source, batch_size):
         edges = list(edgegen)
@@ -207,6 +221,9 @@ def _special_equal(doc1, doc2):
     return d1c == d2c 
 
 def _chunkiter(iterable, size):
+    """
+    Iterate over chunks of size 'size' of an iterable.
+    """
     iterator = iter(iterable)
     for first in iterator:
         yield _itertools.chain([first], _itertools.islice(iterator, size - 1))
