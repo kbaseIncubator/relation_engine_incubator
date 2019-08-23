@@ -8,8 +8,9 @@ the load timestamp are not reproducible as the load may be partially complete. L
 take this into account and take measures to prevent it.
 """
 
-from collections import defaultdict
-import time
+from collections import defaultdict as _defaultdict
+import itertools as _itertools
+import time as _time
 
 # TODO TEST
 # TODO DOCS document reserved fields that will be overwritten if supplied
@@ -21,15 +22,14 @@ _VERBOSE = False
 _ID = 'id'
 _KEY = '_key'
 
-_BATCH_SIZE = 10000
-
 def load_graph_delta(
         vertex_source,
         edge_source,
         database,
         timestamp,
         load_version,
-        merge_source=None):
+        merge_source=None,
+        batch_size=10000):
     """
     Loads a new version of a graph into a graph database, calculating the delta between the graphs
     and expiring / creating new vertices and edges as neccessary.
@@ -54,36 +54,37 @@ def load_graph_delta(
          where the edge originates (the merged vertex) and terminates (the vertex the old vertex
          was merged into). If merge_source is specified, the database must have a merge collection
          specified.
+    batch_size - the number of vertices or edges to process per batch. Higher batch sizes typically
+      decrease processing time and increase memory usage.
     """
     db = database
     if merge_source and not db.get_merge_collection():
         raise ValueError('A merge source is specified but the database ' +
            'has no merge collection')
-    _process_verts(db, vertex_source, timestamp, load_version)
+    _process_verts(db, vertex_source, timestamp, load_version, batch_size)
     if merge_source:
-        _process_merges(db, merge_source, timestamp, load_version)
+        _process_merges(db, merge_source, timestamp, load_version, batch_size)
     
-    if _VERBOSE: print(f'expiring vertices: {time.time()}')
+    if _VERBOSE: print(f'expiring vertices: {_time.time()}')
     db.expire_extant_vertices_without_last_version(timestamp - 1, load_version)
 
-    _process_edges(db, edge_source, timestamp, load_version)
+    _process_edges(db, edge_source, timestamp, load_version, batch_size)
     
-    if _VERBOSE: print(f'expiring edges: {time.time()}')
+    if _VERBOSE: print(f'expiring edges: {_time.time()}')
     for col in db.get_edge_collections():
         db.expire_extant_edges_without_last_version(
             timestamp - 1, load_version, edge_collection=col)
 
-
-def _process_verts(db, vertex_source, timestamp, load_version):
+def _process_verts(db, vertex_source, timestamp, load_version, batch_size):
     count = 1
-    for vertgen in _chunkiter(vertex_source, _BATCH_SIZE):
+    for vertgen in _chunkiter(vertex_source, batch_size):
         vertices = list(vertgen)
-        if _VERBOSE: print(f'vertex batch {count}: {time.time()}')
+        if _VERBOSE: print(f'vertex batch {count}: {_time.time()}')
         count += 1
         keys = [v[_ID] for v in vertices]
-        if _VERBOSE: print(f'  looking up {len(keys)} vertices: {time.time()}')
+        if _VERBOSE: print(f'  looking up {len(keys)} vertices: {_time.time()}')
         dbverts = db.get_vertices(keys, timestamp)
-        if _VERBOSE: print(f'  got {len(dbverts)} vertices: {time.time()}')
+        if _VERBOSE: print(f'  got {len(dbverts)} vertices: {_time.time()}')
         bulk = db.get_batch_updater()
         for v in vertices:
             dbv = dbverts.get(v[_ID])
@@ -95,19 +96,19 @@ def _process_verts(db, vertex_source, timestamp, load_version):
             else:
                 # mark node as seen in this version
                 bulk.set_last_version_on_vertex(dbv[_KEY], load_version)
-        if _VERBOSE: print(f'  updating {bulk.count()} vertices: {time.time()}')
+        if _VERBOSE: print(f'  updating {bulk.count()} vertices: {_time.time()}')
         bulk.update()
 
-def _process_merges(db, merge_source, timestamp, load_version):
+def _process_merges(db, merge_source, timestamp, load_version, batch_size):
     count = 1
-    for mergen in _chunkiter(merge_source, _BATCH_SIZE):
+    for mergen in _chunkiter(merge_source, batch_size):
         merges = list(mergen)
-        if _VERBOSE: print(f'merge batch {count}: {time.time()}')
+        if _VERBOSE: print(f'merge batch {count}: {_time.time()}')
         count += 1
         keys = list({m['from'] for m in merges} | {m['to'] for m in merges})
-        if _VERBOSE: print(f'  looking up {len(keys)} vertices: {time.time()}')
+        if _VERBOSE: print(f'  looking up {len(keys)} vertices: {_time.time()}')
         dbverts = db.get_vertices(keys, timestamp)
-        if _VERBOSE: print(f'  got {len(dbverts)} vertices: {time.time()}')
+        if _VERBOSE: print(f'  got {len(dbverts)} vertices: {_time.time()}')
         bulk = db.get_batch_updater(db.get_merge_collection())
         vertbulk = db.get_batch_updater()
         for m in merges:
@@ -119,26 +120,26 @@ def _process_merges(db, merge_source, timestamp, load_version):
             if dbmerged and dbtarget:
                 vertbulk.expire_vertex(dbmerged[_KEY], timestamp - 1)
                 bulk.create_edge(m[_ID], dbmerged, dbtarget, load_version, timestamp)
-        if _VERBOSE: print(f'  updating {bulk.count()} edges: {time.time()}')
+        if _VERBOSE: print(f'  updating {bulk.count()} edges: {_time.time()}')
         bulk.update()
-        if _VERBOSE: print(f'  updating {vertbulk.count()} vertices: {time.time()}')
+        if _VERBOSE: print(f'  updating {vertbulk.count()} vertices: {_time.time()}')
         vertbulk.update()
 
 # assumes verts have been processed
-def _process_edges(db, edge_source, timestamp, load_version):
+def _process_edges(db, edge_source, timestamp, load_version, batch_size):
     count = 1
-    for edgegen in _chunkiter(edge_source, _BATCH_SIZE):
+    for edgegen in _chunkiter(edge_source, batch_size):
         edges = list(edgegen)
-        if _VERBOSE: print(f'edge batch {count}: {time.time()}')
+        if _VERBOSE: print(f'edge batch {count}: {_time.time()}')
         count += 1
-        keys = defaultdict(list)
+        keys = _defaultdict(list)
         bulkset = {}
         vertkeys = set()
         for e in edges:
             # The edges exists in the current load so their nodes must exist by now
             vertkeys.add(e['to'])
             vertkeys.add(e['from'])
-            col = e.pop('_collection', None)
+            col = e.get('_collection')
             if not col:
                 col = db.get_default_edge_collection()
             keys[col].append(e[_ID])
@@ -146,16 +147,16 @@ def _process_edges(db, edge_source, timestamp, load_version):
                 bulkset[col] = db.get_batch_updater(col)
         dbedges = {}
         for col, keys in keys.items():
-            if _VERBOSE: print(f'  looking up {len(keys)} edges in {col}: {time.time()}')
+            if _VERBOSE: print(f'  looking up {len(keys)} edges in {col}: {_time.time()}')
             dbedges[col] = db.get_edges(keys, timestamp, edge_collection=col)
-            if _VERBOSE: print(f'  got {len(dbedges[col])} edges: {time.time()}')
+            if _VERBOSE: print(f'  got {len(dbedges[col])} edges: {_time.time()}')
         
         # Could cache these, may be fetching the same vertex over and over, but no guarantees
         # the same vertexes are repeated in a reasonable amount of time
         # Batching the fetch is probably enough
-        if _VERBOSE: print(f'  looking up {len(vertkeys)} vertices: {time.time()}')
+        if _VERBOSE: print(f'  looking up {len(vertkeys)} vertices: {_time.time()}')
         dbverts = db.get_vertices(list(vertkeys), timestamp)
-        if _VERBOSE: print(f'  got {len(dbverts)} vertices: {time.time()}')
+        if _VERBOSE: print(f'  got {len(dbverts)} vertices: {_time.time()}')
         keys = None
         vertkeys = None
 
@@ -181,7 +182,7 @@ def _process_edges(db, edge_source, timestamp, load_version):
                 bulk.create_edge(e[_ID], from_, to, load_version, timestamp, e)
         for b in bulkset.values():
             if _VERBOSE:
-                print(f'  updating {b.count()} edges in {b.get_collection()}: {time.time()}')
+                print(f'  updating {b.count()} edges in {b.get_collection()}: {_time.time()}')
             b.update()
 
 # TODO CODE these fields are shared between here and the database. Should probably put them somewhere in common.
@@ -205,10 +206,6 @@ def _special_equal(doc1, doc2):
     return d1c == d2c 
 
 def _chunkiter(iterable, size):
-  def inneriter(first, iterator, size):
-    yield first
-    for _ in range(size - 1): 
-      yield next(iterator)
-  it = iter(iterable)
-  while True:
-    yield inneriter(next(it), it, size)
+    iterator = iter(iterable)
+    for first in iterator:
+        yield _itertools.chain([first], _itertools.islice(iterator, size - 1))
