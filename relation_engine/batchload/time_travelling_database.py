@@ -132,8 +132,7 @@ class ArangoBatchTimeTravellingDB:
               FILTER d.{_FLD_EXPIRED} >= @timestamp AND d.{_FLD_CREATED} <= @timestamp
               RETURN d
           """,
-          bind_vars={'ids': ids, 'timestamp': timestamp, '@col': collection_name},
-          count=True
+          bind_vars={'ids': ids, 'timestamp': timestamp, '@col': collection_name}
         )
         ret = {}
         try:
