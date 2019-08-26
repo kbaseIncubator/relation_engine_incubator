@@ -2,7 +2,7 @@
 Utilities for loading graph data into the relation engine.
 """
 
-# TODO tests
+# TODO TEST
 
 import json
 import unicodedata
@@ -36,7 +36,7 @@ def canonicalize(string, ignore_tokens):
                 ret.append(t)
     return ret
 
-# TODO this should probably be a parameter? YAGNI for now
+# TODO CODE this should probably be a parameter? YAGNI for now
 # see https://www.arangodb.com/2018/07/time-traveling-with-graph-databases/
 # in unix epoch ms this is 2255/6/5
 _MAX_ADB_INTEGER = 2**53 - 1

@@ -2,7 +2,7 @@
 Common code for dealing with NCBI taxonomy files.
 """
 
-# TODO tests
+# TODO TEST
 
 import re
 import unicodedata

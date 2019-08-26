@@ -3,7 +3,7 @@
 # Author: Sean McCorkle
 
 # Calculates the history of each taxa in a number of NCBI taxa datasets.
-# TODO more docs
+# TODO DOCS more docs
 
 import os
 import re

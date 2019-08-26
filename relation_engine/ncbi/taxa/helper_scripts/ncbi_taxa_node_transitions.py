@@ -41,7 +41,7 @@ KEY_TO_STATE = {NODES: ST_EXIST,
                 MERGED: ST_MERGED
                 }
 
-# TODO Update this to use common code when it works
+# TODO CODE Update this to use common code when it works
 
 def load_names(name_file):
     # Could make this use less memory by parsing one nodes worth of entries at a time, since
