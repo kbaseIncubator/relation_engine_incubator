@@ -72,7 +72,7 @@ except for a few special fields:
 |`_id`|ArangoDB internal use|
 |`_from`|ArangoDB internal use|
 |`_to`|ArangoDB internal use|
-|`_collection`|Specify the collection that will contain an edge. This field is ignored for nodes. If there is no value for this field, the default edge collection is used.|
+|`_collection`|Specify the collection that will contain an edge. This field is ignored for nodes and merge edges. If there is no value for this field, the default edge collection is used.|
 |`last_version`| the ID of the last load in which the edge or node appeared.|
 |`first_version`| the ID of the first load in which the edge or node appeared.|
 |`created`| the timestamp, in unix epoch milliseconds, when the edge or node came into existence.|

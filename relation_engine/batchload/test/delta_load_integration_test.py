@@ -243,6 +243,88 @@ def _load_no_merge_source(arango_db, batchsize):
 
     _check_docs(arango_db, e2_expected, 'e2')
 
+def test_merge_edges(arango_db):
+    """
+    Test that merge edges are handled appropriately.
+    """
+
+    vcol = arango_db.create_collection('v')
+    ecol = arango_db.create_collection('e', edge=True)
+    arango_db.create_collection('m', edge=True)
+    
+    _import_bulk(
+        vcol,
+        [
+         {'id': 'root', 'data': 'foo'},   # will not change
+         {'id': 'merged', 'data': 'bar'}, # will be merged
+         {'id': 'target', 'data': 'baz'}, # will not change
+        ],
+        100, ADB_MAX_TIME, 'v1')
+    
+    _import_bulk(
+        ecol,
+        [
+         {'id': 'to_m', 'from': 'root', 'to': 'merged', 'data': 'foo'}, # will be deleted
+         {'id': 'to_t', 'from': 'root', 'to': 'target', 'data': 'bar'}  # shouldn't be touched
+        ],
+        100, ADB_MAX_TIME, 'v1', vert_col_name=vcol.name)
+
+    vsource = [
+        {'id': 'root', 'data': 'foo'},   # will not change
+        {'id': 'target', 'data': 'baz'}, # will not change
+    ]
+
+    esource = [
+        {'id': 'to_t', 'from': 'root', 'to': 'target', 'data': 'bar'} # no change
+    ]
+
+    msource = [
+        {'id': 'f_to_t', 'from': 'fake1', 'to': 'target', 'data': 'whee'},  # will be ignored
+        {'id': 'm_to_t', 'from': 'merged', 'to': 'target', 'data': 'woo'},  # will be applied
+        {'id': 't_to_f', 'from': 'target', 'to': 'fake2', 'data': 'whoa'}   # will be ignored
+    ]
+
+    db = ArangoBatchTimeTravellingDB(arango_db, 'v', default_edge_collection='e',
+            merge_collection='m')
+    
+    load_graph_delta(vsource, esource, db, 500, 'v2', merge_source=msource)
+
+    vexpected = [
+        {'id': 'root', '_key': 'root_v1', '_id': 'v/root_v1',
+         'first_version': 'v1', 'last_version': 'v2', 'created': 100, 'expired': ADB_MAX_TIME,
+         'data': 'foo'},
+        {'id': 'merged', '_key': 'merged_v1', '_id': 'v/merged_v1',
+         'first_version': 'v1', 'last_version': 'v1', 'created': 100, 'expired': 499,
+         'data': 'bar'},
+        {'id': 'target', '_key': 'target_v1', '_id': 'v/target_v1',
+         'first_version': 'v1', 'last_version': 'v2', 'created': 100, 'expired': ADB_MAX_TIME,
+         'data': 'baz'},
+    ]
+
+    _check_docs(arango_db, vexpected, 'v')
+
+    e_expected = [
+        {'id': 'to_m', 'from': 'root', 'to': 'merged',
+         '_key': 'to_m_v1', '_id': 'e/to_m_v1', '_from': 'v/root_v1', '_to': 'v/merged_v1',
+         'first_version': 'v1', 'last_version': 'v1', 'created': 100, 'expired': 499,
+         'data': 'foo'},
+        {'id': 'to_t', 'from': 'root', 'to': 'target',
+         '_key': 'to_t_v1', '_id': 'e/to_t_v1', '_from': 'v/root_v1', '_to': 'v/target_v1',
+         'first_version': 'v1', 'last_version': 'v2', 'created': 100, 'expired': ADB_MAX_TIME,
+         'data': 'bar'},
+    ]
+
+    _check_docs(arango_db, e_expected, 'e')
+
+    m_expected = [
+        {'id': 'm_to_t', 'from': 'merged', 'to': 'target',
+         '_key': 'm_to_t_v2', '_id': 'm/m_to_t_v2', '_from': 'v/merged_v1', '_to': 'v/target_v1',
+         'first_version': 'v2', 'last_version': 'v2', 'created': 500, 'expired': ADB_MAX_TIME,
+         'data': 'woo'},
+    ]
+
+    _check_docs(arango_db, m_expected, 'm')
+
 # modifies docs in place!
 # vert_col_name != None implies and edge
 def _import_bulk(

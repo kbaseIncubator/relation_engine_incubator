@@ -129,7 +129,7 @@ def _process_merges(db, merge_source, timestamp, load_version, batch_size):
             # so we don't worry about it for now.
             if dbmerged and dbtarget:
                 vertbulk.expire_vertex(dbmerged[_KEY], timestamp - 1)
-                bulk.create_edge(m[_ID], dbmerged, dbtarget, load_version, timestamp)
+                bulk.create_edge(m[_ID], dbmerged, dbtarget, load_version, timestamp, m)
         if _VERBOSE: print(f'  updating {bulk.count()} edges: {_time.time()}')
         bulk.update()
         if _VERBOSE: print(f'  updating {vertbulk.count()} vertices: {_time.time()}')
