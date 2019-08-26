@@ -20,6 +20,8 @@ NAMES_IN_FILE = 'names.dmp'
 NODES_IN_FILE = 'nodes.dmp'
 MERGED_IN_FILE = 'merged.dmp'
 
+# TODO password file
+
 def parse_args():
     parser = argparse.ArgumentParser(description=
 """
