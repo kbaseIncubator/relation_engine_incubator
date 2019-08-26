@@ -9,8 +9,6 @@
 
 # TODO TEST add unit tests for the delta load algorithm with a db mock.
 
-# TODO NOW TEST merge tests
-
 from relation_engine.batchload.time_travelling_database import ArangoBatchTimeTravellingDB
 from relation_engine.batchload.delta_load import load_graph_delta
 from arango import ArangoClient
@@ -326,7 +324,7 @@ def test_merge_edges(arango_db):
     _check_docs(arango_db, m_expected, 'm')
 
 # modifies docs in place!
-# vert_col_name != None implies and edge
+# vert_col_name != None implies an edge
 def _import_bulk(
         col,
         docs,

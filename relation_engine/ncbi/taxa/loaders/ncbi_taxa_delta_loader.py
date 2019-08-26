@@ -3,6 +3,7 @@
 # TODO TEST
 
 import argparse
+import getpass
 import os
 import unicodedata
 from arango import ArangoClient
@@ -20,10 +21,9 @@ NODES_IN_FILE = 'nodes.dmp'
 MERGED_IN_FILE = 'merged.dmp'
 
 def parse_args():
-    # TODO AUTH support user / pwd for db
     parser = argparse.ArgumentParser(description=
 """
-Load a NCBI taxonomy dump into an AragoDB time travelling database, calculating and applying the
+Load a NCBI taxonomy dump into an ArangoDB time travelling database, calculating and applying the
 changes between the prior load and the current load, and retaining the prior load.
 """.strip())
     parser.add_argument('--dir', required=True,
@@ -31,11 +31,19 @@ changes between the prior load and the current load, and retaining the prior loa
     parser.add_argument(
         '--arango-url',
         required=True,
-        help='The url of the arango DB server (e.g. http://localhost:8528')
+        help='The url of the ArangoDB server (e.g. http://localhost:8528')
     parser.add_argument(
         '--database',
         required=True,
         help='the name of the ArangoDB database that will be altered')
+    parser.add_argument(
+        '--user',
+        help='the ArangoDB user name; if --pwd-file is not included a password prompt will be ' +
+            'presented. Omit to connect with default credentials.')
+    parser.add_argument(
+        '--pwd-file',
+        help='the path to a file containing the ArangoDB password and nothing else; ' +
+            'if --user is included and --pwd-file is omitted a password prompt will be presented.')
     parser.add_argument(
         '--node-collection',
         required=True,
@@ -72,8 +80,17 @@ def main():
 
     url = urlparse(a.arango_url)
     client = ArangoClient(protocol=url.scheme, host=url.hostname, port=url.port)
+    if a.user:
+        if a.pwd_file:
+            with open(a.pwd_file) as pwd_file:
+                pwd = pwd_file.read().strip()
+        else:
+            pwd = getpass.getpass()
+        db = client.db(a.database, a.user, pwd, verify=True)
+    else:
+        db = client.db(a.database, verify=True)
     attdb = ArangoBatchTimeTravellingDB(
-        client.db(a.database, verify=True),
+        db,
         a.node_collection,
         default_edge_collection=a.edge_collection,
         merge_collection=a.merge_edge_collection)
