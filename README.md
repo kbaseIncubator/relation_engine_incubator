@@ -124,7 +124,7 @@ For a delta loader:
 
 
 ## Testing
-To run tests, arangodb must be running locally on the default port without credentials.
+To run tests, arangodb must be running locally on the default port with default root credentials.
 Then from the repository root:
 ```
 export PYTHONPATH=$(pwd); pytest
