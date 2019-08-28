@@ -30,7 +30,20 @@ Theoretically, the delta loader could be used to load the first instance of the 
 but since it will perform numerous unnecessary queries against the database to do the graph
 comparison, the bulk loader is typically faster.
 
-## Requirements
+### Existing loaders
+
+#### NCBI Taxonomy Dump Format
+
+Bulk loader: `relation_engine/ncbi/taxa/loaders/ncbi_taxa_bulk_loader.py`  
+Delta loader: `relation_engine/ncbi/taxa/loaders/ncbi_taxa_delta_loader.py`
+
+#### OBOGraph Ontology JSON Format
+
+There is no bulk loader as ontologies are small enough that an initial load is usually very
+fast even with the delta loader.  
+Delta loader: `relation_engine/ontologies/obograph/loaders/obograph_delta_loader.py`
+
+### Requirements
 
 For the the delta loader to operate efficiently:
 
@@ -44,7 +57,7 @@ For the the delta loader to operate efficiently:
 Loaders for NCBI taxonomy are supplied in `relation_engine/ncbi/taxa/loaders` and can be examined
 as examples.
 
-Two create a new loader, at minimum an edge provider, a node provider, and a CLI must be
+To create a new loader, at minimum an edge provider, a node provider, and a CLI must be
 created.
 
 #### Edge and node providers

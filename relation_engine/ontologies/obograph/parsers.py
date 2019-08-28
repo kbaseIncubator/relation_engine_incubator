@@ -6,7 +6,6 @@ So far this has only been run with GO Basic.
 
 # TODO TEST
 # TODO DOCS better documentation.
-# TODO NOW update readme
 
 import json as _json
 
