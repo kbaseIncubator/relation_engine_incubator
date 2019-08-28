@@ -177,6 +177,8 @@ class OBOGraphLoader:
                     yield self._to_edge(from_, to, outpred)
 
     def _to_edge(self, from_, to, predicate):
+        predicate = predicate.replace(' ', '_') # may need to expand this, see
+        # https://www.arangodb.com/docs/stable/data-modeling-naming-conventions-document-keys.html
         return {_OUT_ID: f'{from_}::{to}::{predicate}',
                 _OUT_FROM: from_,
                 _OUT_TO: to,
