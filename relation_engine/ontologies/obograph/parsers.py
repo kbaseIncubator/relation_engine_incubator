@@ -27,14 +27,21 @@ _OBO_COMMENTS = 'comments'
 _OBO_SUBSETS = 'subsets'
 _OBO_SYNONYMS = 'synonyms'
 _OBO_XREFS = 'xrefs'
+_OBO_SUBJECT = 'sub'
+_OBO_OBJECT = 'obj'
 _OBO_PREDICATE = 'pred'
 _OBO_VALUE = 'val'
 
 _OBO_NAMESPACES = frozenset(['has_obo_namespace'])
 _OBO_ALTERNATIVE_IDS = frozenset(['has_alternative_id'])
+_OBO_REPLACED_BY = frozenset(['term replaced by'])
+_OBO_CONSIDER = frozenset(['consider'])
 
 
 _OUT_ID = 'id'
+_OUT_FROM = 'from'
+_OUT_TO = 'to'
+_OUT_EDGE_TYPE = 'type'
 _OUT_NAME = 'name'
 _OUT_NAMESPACE = 'namespace'
 _OUT_ALTERNATIVE_IDS = 'alt_ids'
@@ -43,6 +50,8 @@ _OUT_COMMENTS = 'comments'
 _OUT_SUBSETS = 'subsets'
 _OUT_SYNONYMS = 'synonyms'
 _OUT_XREFS = 'xrefs'
+_OUT_REPLACED_BY = 'replaced_by'
+_OUT_CONSIDER = 'consider'
 
 class OBOGraphLoader:
     """
@@ -106,27 +115,35 @@ class OBOGraphLoader:
             d.pop(_OBO_META, None)
         return docs
 
+    def _is_valid_node(self, node, deprecated_ok=False):
+        n = node
+        if n[_OBO_TYPE] != _OBO_TYPE_CLASS:
+            return False
+        id_ = self._strip_url(n[_OBO_ID])
+        if not id_.startswith(self._ont_prefix):
+            return False
+        meta = n.get(_OBO_META)
+        if not meta:
+            raise ValueError(f'No {_OBO_META} field found for node ID {id_}')
+        if not deprecated_ok and meta.get(_OBO_DEPRECATED):
+            # may want some sort of special loader for loading pre-expired deprecated nodes
+            # needs more thought
+            return False
+        return True
+
     def get_node_provider(self):
         """
         Returns a generator over the nodes in the graph in time travelling format.
         """
         for n in self._obo[_OBO_NODES]:
-            if n[_OBO_TYPE] != _OBO_TYPE_CLASS:
+            if not self._is_valid_node(n):
                 continue
             id_ = self._strip_url(n[_OBO_ID])
-            if not id_.startswith(self._ont_prefix):
-                continue
             meta = n.get(_OBO_META)
-            if not meta:
-                raise ValueError(f'No {_OBO_META} field found for node ID {id_}')
-            if meta.get(_OBO_DEPRECATED):
-                # may want some sort of special loader for loading pre-expired deprecated nodes
-                # needs more thought
-                continue
             defi = meta.get(_OBO_DEFINITION)
             if defi:
                 defi.pop(_OBO_META, None)
-                
+
             ret = {_OUT_ID: id_,
                    _OUT_NAME: n[_OBO_LABEL],
                    _OUT_NAMESPACE: self._get_meta_property(
@@ -143,10 +160,42 @@ class OBOGraphLoader:
             yield ret
 
     def get_merge_provider(self):
-        # TODO NOW
-        return []
-    
+        """
+        Returns a generator over the merge edges in the graph in time travelling format.
+        """
+        for n in self._obo[_OBO_NODES]:
+            if not self._is_valid_node(n, deprecated_ok=True):
+                continue
+            from_ = self._strip_url(n[_OBO_ID])
+            meta = n.get(_OBO_META)
+            for preds, outpred in [(_OBO_REPLACED_BY, _OUT_REPLACED_BY),
+                                   (_OBO_CONSIDER, _OUT_CONSIDER)]:
+                for to in self._get_meta_properties(meta, _OBO_BASIC_PROPS, preds):
+                    # Some IDs are _, some are :. Wow
+                    to = self._strip_url(to).replace(':', '_')
+                    # For GO to is not external. If this is untrue, check prefix and skip.
+                    yield self._to_edge(from_, to, outpred)
+
+    def _to_edge(self, from_, to, predicate):
+        return {_OUT_ID: f'{from_}::{to}::{predicate}',
+                _OUT_FROM: from_,
+                _OUT_TO: to,
+                _OUT_EDGE_TYPE: predicate
+                }
+
     def get_edge_provider(self):
-        # TODO NOW
-        return []
+        """
+        Returns a generator over the edges in the graph in time travelling format.
+        """
+        # At least in GO, edges don't contact deprecated nodes
+        # Might need to build up a list of deprecated IDs for other ontologies, or GO later
+        for e in self._obo[_OBO_EDGES]:
+            from_ = self._strip_url(e[_OBO_SUBJECT])
+            to = self._strip_url(e[_OBO_OBJECT])
+            if not from_.startswith(self._ont_prefix) or not to.startswith(self._ont_prefix):
+                continue
+            pred = e[_OBO_PREDICATE]
+            if pred in self._property_map:
+                pred = self._property_map[pred]
+            yield self._to_edge(from_, to, pred)
 
