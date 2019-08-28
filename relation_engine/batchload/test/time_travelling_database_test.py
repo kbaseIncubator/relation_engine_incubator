@@ -110,6 +110,74 @@ def test_init_fail_bad_merge_collection(arango_db):
             arango_db, 'v', default_edge_collection='e', merge_collection='m'),
         ValueError, 'm is not an edge collection')
 
+IDX_SPEC_ID = ("{'type': 'persistent', 'fields': ['id', 'expired', 'created'], " +
+    "'sparse': False, 'unique': False}")
+
+IDX_SPEC_EXP = ("{'type': 'persistent', 'fields': ['expired', 'created', 'last_version'], " +
+    "'sparse': False, 'unique': False}")
+
+def test_init_fail_no_id_index_vertex_collection(arango_db):
+    col = arango_db.create_collection('v')
+    col.add_persistent_index(['expired', 'created', 'last_version'])
+    create_timetravel_collection(arango_db, 'e', edge=True)
+
+    check_exception(
+        lambda: ArangoBatchTimeTravellingDB(
+            arango_db, 'v', default_edge_collection='e'),
+        ValueError, f'Collection v is missing required index with specification {IDX_SPEC_ID}')
+
+def test_init_fail_no_expire_index_vertex_collection(arango_db):
+    col = arango_db.create_collection('v')
+    col.add_persistent_index(['id', 'expired', 'created'])
+    create_timetravel_collection(arango_db, 'e', edge=True)
+
+    check_exception(
+        lambda: ArangoBatchTimeTravellingDB(
+            arango_db, 'v', default_edge_collection='e'),
+        ValueError, f'Collection v is missing required index with specification {IDX_SPEC_EXP}')
+
+def test_init_fail_no_id_index_edge_collection(arango_db):
+    create_timetravel_collection(arango_db, 'v')
+    col = arango_db.create_collection('e', edge=True)
+    col.add_persistent_index(['expired', 'created', 'last_version'])
+
+    check_exception(
+        lambda: ArangoBatchTimeTravellingDB(
+            arango_db, 'v', default_edge_collection='e'),
+        ValueError, f'Collection e is missing required index with specification {IDX_SPEC_ID}')
+
+def test_init_fail_no_expire_index_edge_collection(arango_db):
+    create_timetravel_collection(arango_db, 'v')
+    col = arango_db.create_collection('e', edge=True)
+    col.add_persistent_index(['id', 'expired', 'created'])
+
+    check_exception(
+        lambda: ArangoBatchTimeTravellingDB(
+            arango_db, 'v', default_edge_collection='e'),
+        ValueError, f'Collection e is missing required index with specification {IDX_SPEC_EXP}')
+
+def test_init_fail_no_id_index_merge_collection(arango_db):
+    create_timetravel_collection(arango_db, 'v')
+    create_timetravel_collection(arango_db, 'e', edge=True)
+    col = arango_db.create_collection('m', edge=True)
+    col.add_persistent_index(['expired', 'created', 'last_version'])
+
+    check_exception(
+        lambda: ArangoBatchTimeTravellingDB(
+            arango_db, 'v', default_edge_collection='e', merge_collection='m'),
+        ValueError, f'Collection m is missing required index with specification {IDX_SPEC_ID}')
+
+def test_init_fail_no_expire_index_merge_collection(arango_db):
+    create_timetravel_collection(arango_db, 'v')
+    create_timetravel_collection(arango_db, 'e', edge=True)
+    col = arango_db.create_collection('m', edge=True)
+    col.add_persistent_index(['id', 'expired', 'created'])
+
+    check_exception(
+        lambda: ArangoBatchTimeTravellingDB(
+            arango_db, 'v', default_edge_collection='e', merge_collection='m'),
+        ValueError, f'Collection m is missing required index with specification {IDX_SPEC_EXP}')
+
 def test_fail_no_default_edge_collection(arango_db):
     """
     Really should test this for all methods but that seems like a lot of tests for the same
