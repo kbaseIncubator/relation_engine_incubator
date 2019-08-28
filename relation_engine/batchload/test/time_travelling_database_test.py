@@ -5,6 +5,8 @@
 # TODO TEST more tests
 
 from relation_engine.batchload.time_travelling_database import ArangoBatchTimeTravellingDB
+from relation_engine.batchload.test.test_helpers import create_timetravel_collection
+from relation_engine.batchload.test.test_helpers import check_docs, check_exception
 from arango import ArangoClient
 from pytest import fixture
 
@@ -25,15 +27,15 @@ def arango_db():
     sys.delete_database(DB_NAME)
 
 def test_get_vertex_collection(arango_db):
-    arango_db.create_collection('v')
-    arango_db.create_collection('e', edge=True)
+    create_timetravel_collection(arango_db, 'v')
+    create_timetravel_collection(arango_db, 'e', edge=True)
 
     att = ArangoBatchTimeTravellingDB(arango_db, 'v', default_edge_collection='e')
     assert att.get_vertex_collection() == 'v'
 
 def test_get_default_edge_collection(arango_db):
-    arango_db.create_collection('v')
-    arango_db.create_collection('e', edge=True)
+    create_timetravel_collection(arango_db, 'v')
+    create_timetravel_collection(arango_db, 'e', edge=True)
 
     att = ArangoBatchTimeTravellingDB(arango_db, 'v', edge_collections=['e'])
     assert att.get_default_edge_collection() is None
@@ -42,10 +44,10 @@ def test_get_default_edge_collection(arango_db):
     assert att.get_default_edge_collection() is 'e'
 
 def test_get_edge_collections(arango_db):
-    arango_db.create_collection('v')
-    arango_db.create_collection('e1', edge=True)
-    arango_db.create_collection('e2', edge=True)
-    arango_db.create_collection('e3', edge=True)
+    create_timetravel_collection(arango_db, 'v')
+    create_timetravel_collection(arango_db, 'e1', edge=True)
+    create_timetravel_collection(arango_db, 'e2', edge=True)
+    create_timetravel_collection(arango_db, 'e3', edge=True)
 
     adbtt = ArangoBatchTimeTravellingDB(arango_db, 'v', default_edge_collection='e1')
     assert adbtt.get_edge_collections() == ['e1']
@@ -58,9 +60,9 @@ def test_get_edge_collections(arango_db):
     assert adbtt.get_edge_collections() == ['e1', 'e2', 'e3']
 
 def test_get_merge_collection(arango_db):
-    arango_db.create_collection('v')
-    arango_db.create_collection('e', edge=True)
-    arango_db.create_collection('m', edge=True)
+    create_timetravel_collection(arango_db, 'v')
+    create_timetravel_collection(arango_db, 'e', edge=True)
+    create_timetravel_collection(arango_db, 'm', edge=True)
 
     att = ArangoBatchTimeTravellingDB(arango_db, 'v', default_edge_collection='e')
     assert att.get_merge_collection() is None
@@ -70,40 +72,40 @@ def test_get_merge_collection(arango_db):
     assert att.get_merge_collection() is 'm'
 
 def test_init_fail_no_edge_collections(arango_db):
-    arango_db.create_collection('v')
-    arango_db.create_collection('m', edge=True)
+    create_timetravel_collection(arango_db, 'v')
+    create_timetravel_collection(arango_db, 'm', edge=True)
 
-    _check_exception(lambda: ArangoBatchTimeTravellingDB(arango_db, 'v', merge_collection='m'),
+    check_exception(lambda: ArangoBatchTimeTravellingDB(arango_db, 'v', merge_collection='m'),
         ValueError, 'At least one edge collection must be specified')
 
 def test_init_fail_bad_vertex_collection(arango_db):
-    arango_db.create_collection('v')
-    arango_db.create_collection('e', edge=True)
+    create_timetravel_collection(arango_db, 'v')
+    create_timetravel_collection(arango_db, 'e', edge=True)
 
-    _check_exception(
+    check_exception(
         lambda: ArangoBatchTimeTravellingDB(arango_db, 'e', default_edge_collection='e'),
         ValueError, 'e is not a vertex collection')
 
 
 def test_init_fail_bad_edge_collection(arango_db):
-    arango_db.create_collection('v')
+    create_timetravel_collection(arango_db, 'v')
     col_name = 'edge'
-    arango_db.create_collection(col_name)
+    create_timetravel_collection(arango_db, col_name)
 
-    _check_exception(
+    check_exception(
         lambda: ArangoBatchTimeTravellingDB(arango_db, 'v', default_edge_collection=col_name),
         ValueError, 'edge is not an edge collection')
 
-    _check_exception(
+    check_exception(
         lambda: ArangoBatchTimeTravellingDB(arango_db, 'v', edge_collections=[col_name]),
         ValueError, 'edge is not an edge collection')
 
 def test_init_fail_bad_merge_collection(arango_db):
-    arango_db.create_collection('v')
-    arango_db.create_collection('e', edge=True)
-    arango_db.create_collection('m')
+    create_timetravel_collection(arango_db, 'v')
+    create_timetravel_collection(arango_db, 'e', edge=True)
+    create_timetravel_collection(arango_db, 'm')
 
-    _check_exception(
+    check_exception(
         lambda: ArangoBatchTimeTravellingDB(
             arango_db, 'v', default_edge_collection='e', merge_collection='m'),
         ValueError, 'm is not an edge collection')
@@ -113,12 +115,12 @@ def test_fail_no_default_edge_collection(arango_db):
     Really should test this for all methods but that seems like a lot of tests for the same
     chunk of factored out code
     """
-    arango_db.create_collection('v')
+    create_timetravel_collection(arango_db, 'v')
     col_name = 'edge'
-    arango_db.create_collection(col_name, edge=True)
+    create_timetravel_collection(arango_db, col_name, edge=True)
     adbtt = ArangoBatchTimeTravellingDB(arango_db, 'v', edge_collections=[col_name])
 
-    _check_exception(lambda:  adbtt.get_edges(['id'], 3), ValueError,
+    check_exception(lambda:  adbtt.get_edges(['id'], 3), ValueError,
         'No default edge collection specified, must specify edge collection')
 
 def test_fail_no_such_edge_collection(arango_db):
@@ -128,34 +130,33 @@ def test_fail_no_such_edge_collection(arango_db):
 
     Also tests that duplicate collection names don't cause a problem
     """
-    arango_db.create_collection('v')
-    arango_db.create_collection('e1', edge=True)
-    arango_db.create_collection('e2', edge=True)
-    arango_db.create_collection('e3', edge=True)
-    arango_db.create_collection('m', edge=True)
+    create_timetravel_collection(arango_db, 'v')
+    create_timetravel_collection(arango_db, 'e1', edge=True)
+    create_timetravel_collection(arango_db, 'e2', edge=True)
+    create_timetravel_collection(arango_db, 'e3', edge=True)
+    create_timetravel_collection(arango_db, 'm', edge=True)
 
     # without merge collection
     adbtt = ArangoBatchTimeTravellingDB(arango_db, 'v', default_edge_collection='e1',
         edge_collections=['e2', 'e3', 'e2', 'e1'])
 
-    _check_exception(lambda:  adbtt.expire_edge('id', 3, 'e4'), ValueError,
+    check_exception(lambda:  adbtt.expire_edge('id', 3, 'e4'), ValueError,
         'Edge collection e4 was not registered at initialization')
 
     # with merge collection
     adbtt = ArangoBatchTimeTravellingDB(arango_db, 'v', default_edge_collection='e1',
         edge_collections=['e2', 'e3', 'e2', 'e1'], merge_collection='m')
 
-    _check_exception(lambda:  adbtt.expire_edge('id', 3, 'e4'), ValueError,
+    check_exception(lambda:  adbtt.expire_edge('id', 3, 'e4'), ValueError,
         'Edge collection e4 was not registered at initialization')
 
 def test_get_vertices(arango_db):
     """
     Tests that getting a vertex returns the correct vertex. In particular checks for OB1 errors.
     """
-
     col_name = 'verts'
-    col = arango_db.create_collection(col_name)
-    arango_db.create_collection('e', edge=True)
+    col = create_timetravel_collection(arango_db, col_name)
+    create_timetravel_collection(arango_db, 'e', edge=True)
 
     # it's assumed that given an id and a timestamp there's <= 1 match in the collection
     col.import_bulk([{'_key': '1', 'id': 'foo', 'created': 100, 'expired': 600},
@@ -188,7 +189,7 @@ def test_get_vertices(arango_db):
 
     col.insert({'_key': '5', 'id': 'bar', 'created': 150, 'expired': 250})
 
-    _check_exception(lambda:  att.get_vertices(['bar'], 200), ValueError,
+    check_exception(lambda:  att.get_vertices(['bar'], 200), ValueError,
         'db contains > 1 document for id bar, timestamp 200, collection verts')
 
 def test_get_edges(arango_db):
@@ -196,9 +197,9 @@ def test_get_edges(arango_db):
     Tests that getting a edge returns the correct edge. In particular checks for OB1 errors.
     """
 
-    arango_db.create_collection('v')
+    create_timetravel_collection(arango_db, 'v')
     col_name = 'edges'
-    col = arango_db.create_collection(col_name, edge=True)
+    col = create_timetravel_collection(arango_db, col_name, edge=True)
 
     # it's assumed that given an id and a timestamp there's <= 1 match in the collection
     col.import_bulk([{'_key': '1', '_from': 'fake/1', '_to': 'fake/2', 'id': 'foo',
@@ -239,17 +240,16 @@ def test_get_edges(arango_db):
     col.insert({'_key': '5', '_from': 'fake/1', '_to': 'fake/2', 'id': 'bar',
                 'created': 150, 'expired': 250})
 
-    _check_exception(lambda:  att.get_edges(['bar'], 200), ValueError,
+    check_exception(lambda:  att.get_edges(['bar'], 200), ValueError,
         'db contains > 1 document for id bar, timestamp 200, collection edges')
 
 def test_save_vertex(arango_db):
     """
     Tests saving a vertex and retrieving the new vertex.
     """
-
     col_name = 'verts'
-    arango_db.create_collection(col_name)
-    arango_db.create_collection('e', edge=True)
+    create_timetravel_collection(arango_db, col_name)
+    create_timetravel_collection(arango_db, 'e', edge=True)
     att = ArangoBatchTimeTravellingDB(arango_db, col_name, default_edge_collection='e')
 
     k = att.save_vertex('myid', 'load-ver1', 500, {'science': 'yes!'})
@@ -281,10 +281,9 @@ def test_save_edge(arango_db):
     """
     Tests saving an edge and retrieving the new edge.
     """
-
-    arango_db.create_collection('v')
+    create_timetravel_collection(arango_db, 'v')
     col_name = 'edges'
-    arango_db.create_collection(col_name, edge=True)
+    create_timetravel_collection(arango_db, col_name, edge=True)
     att = ArangoBatchTimeTravellingDB(arango_db, 'v', edge_collections=[col_name])
 
     k = att.save_edge(
@@ -340,10 +339,9 @@ def test_save_merge_edge(arango_db):
 
     Could be tests for calling multiple methods on merge edges but that seems like overkill.
     """
-
-    arango_db.create_collection('v')
-    arango_db.create_collection('e', edge=True)
-    arango_db.create_collection('m', edge=True)
+    create_timetravel_collection(arango_db, 'v')
+    create_timetravel_collection(arango_db, 'e', edge=True)
+    create_timetravel_collection(arango_db, 'm', edge=True)
     att = ArangoBatchTimeTravellingDB(arango_db, 'v', edge_collections=['e'], merge_collection='m')
 
     k = att.save_edge(
@@ -375,10 +373,9 @@ def test_set_last_version_on_vertex(arango_db):
     Tests setting the `last_version` field on a vertex, and specifically that the correct
     vertex is modified.
     """
-
     col_name = 'verts'
-    arango_db.create_collection(col_name)
-    arango_db.create_collection('e', edge=True)
+    create_timetravel_collection(arango_db, col_name)
+    create_timetravel_collection(arango_db, 'e', edge=True)
     att = ArangoBatchTimeTravellingDB(arango_db, col_name, edge_collections=['e'])
 
     key = att.save_vertex('myid', 'load-ver1', 500, {'science': 'yes!'})
@@ -411,10 +408,9 @@ def test_set_last_version_on_edge(arango_db):
     Tests setting the `last_version` field on an edge, and specifically that the correct
     edge is modified.
     """
-
-    arango_db.create_collection('v')
+    create_timetravel_collection(arango_db, 'v')
     col_name = 'edges'
-    arango_db.create_collection(col_name, edge=True)
+    create_timetravel_collection(arango_db, col_name, edge=True)
     att = ArangoBatchTimeTravellingDB(arango_db, 'v', default_edge_collection=col_name)
 
     key = att.save_edge(
@@ -465,10 +461,10 @@ def _setup_expire_vertex(arango_db):
     vert_col_name = 'verts'
     edge1_col_name = 'edges1'
     edge2_col_name = 'edges2'
-    vert_col = arango_db.create_collection(vert_col_name)
-    fake_col = arango_db.create_collection('fake')
-    edge1_col = arango_db.create_collection(edge1_col_name, edge=True)
-    edge2_col = arango_db.create_collection(edge2_col_name, edge=True)
+    vert_col = create_timetravel_collection(arango_db, vert_col_name)
+    fake_col = create_timetravel_collection(arango_db, 'fake')
+    edge1_col = create_timetravel_collection(arango_db, edge1_col_name, edge=True)
+    edge2_col = create_timetravel_collection(arango_db, edge2_col_name, edge=True)
 
     vert_col.import_bulk([
         {'_key': '1', '_id': 'verts/1', 'id': 'foo', 'created': 100, 'expired': 9000},
@@ -527,8 +523,8 @@ def test_expire_vertex_single_vertex(arango_db):
 
     _check_no_fake_changes(arango_db)
 
-    _check_docs(arango_db, edges1, 'edges1')
-    _check_docs(arango_db, edges2, 'edges2')
+    check_docs(arango_db, edges1, 'edges1')
+    check_docs(arango_db, edges2, 'edges2')
 
 
 def test_expire_edge(arango_db):
@@ -537,11 +533,10 @@ def test_expire_edge(arango_db):
 
     Also test that a merge collection doesn't change the results.
     """
-
-    arango_db.create_collection('v')
+    create_timetravel_collection(arango_db, 'v')
     col_name = 'edges'
-    arango_db.create_collection(col_name, edge=True)
-    arango_db.create_collection('m', edge=True)
+    create_timetravel_collection(arango_db, col_name, edge=True)
+    create_timetravel_collection(arango_db, 'm', edge=True)
     att = ArangoBatchTimeTravellingDB(
         arango_db, 'v', default_edge_collection=col_name, merge_collection='m')
 
@@ -593,8 +588,8 @@ def test_expire_extant_vertices_without_last_version(arango_db):
     Tests expiring vertices that exist at a specfic time without a given last version.
     """
     col_name = 'verts'
-    col = arango_db.create_collection(col_name)
-    arango_db.create_collection('e', edge=True)
+    col = create_timetravel_collection(arango_db, col_name)
+    create_timetravel_collection(arango_db, 'e', edge=True)
 
     test_data = [
         {'_key': '0', 'id': 'baz', 'created': 100, 'expired': 300, 'last_version': '2'},
@@ -623,7 +618,7 @@ def test_expire_extant_vertices_without_last_version(arango_db):
          'last_version': '2'},
         ]
 
-    _check_docs(arango_db, expected, col_name)
+    check_docs(arango_db, expected, col_name)
 
     # test 2
     col.delete_match({})
@@ -644,7 +639,7 @@ def test_expire_extant_vertices_without_last_version(arango_db):
          'last_version': '2'},
         ]
 
-    _check_docs(arango_db, expected, col_name)
+    check_docs(arango_db, expected, col_name)
 
 def test_expire_extant_edges_without_last_version(arango_db):
     """
@@ -652,10 +647,10 @@ def test_expire_extant_edges_without_last_version(arango_db):
 
     Also test that a merge collection doesn't change the results without a default edge collection.
     """
-    arango_db.create_collection('v')
+    create_timetravel_collection(arango_db, 'v')
     col_name = 'edges'
-    col = arango_db.create_collection(col_name, edge=True)
-    arango_db.create_collection('m', edge=True)
+    col = create_timetravel_collection(arango_db, col_name, edge=True)
+    create_timetravel_collection(arango_db, 'm', edge=True)
 
     test_data = [
         {'_key': '0', 'id': 'baz', 'created': 100, 'expired': 300, 'last_version': '2',
@@ -690,7 +685,7 @@ def test_expire_extant_edges_without_last_version(arango_db):
          'last_version': '2', '_from': 'fake/1', '_to': 'fake/2'},
         ]
 
-    _check_docs(arango_db, expected, col_name)
+    check_docs(arango_db, expected, col_name)
 
     # test 2
     col.delete_match({})
@@ -711,7 +706,7 @@ def test_expire_extant_edges_without_last_version(arango_db):
          'last_version': '2', '_from': 'fake/1', '_to': 'fake/2'},
         ]
 
-    _check_docs(arango_db, expected, col_name)
+    check_docs(arango_db, expected, col_name)
 
 ####################################
 # Batch updater tests
@@ -723,8 +718,8 @@ def test_batch_noop_vertex(arango_db):
 
     Also check collection name and collection type.
     """
-    col = arango_db.create_collection('v')
-    arango_db.create_collection('e', edge=True)
+    col = create_timetravel_collection(arango_db, 'v')
+    create_timetravel_collection(arango_db, 'e', edge=True)
     att = ArangoBatchTimeTravellingDB(arango_db, 'v', default_edge_collection='e')
     b = att.get_batch_updater()
     assert b.get_collection() == 'v'
@@ -744,9 +739,9 @@ def test_batch_noop_edge(arango_db):
 
     Also check that merge collection isn't picked up accidentally
     """
-    arango_db.create_collection('v')
-    col = arango_db.create_collection('e', edge=True)
-    arango_db.create_collection('m', edge=True)
+    create_timetravel_collection(arango_db, 'v')
+    col = create_timetravel_collection(arango_db, 'e', edge=True)
+    create_timetravel_collection(arango_db, 'm', edge=True)
     att = ArangoBatchTimeTravellingDB(
         arango_db, 'v', default_edge_collection='e', merge_collection='m')
     b = att.get_batch_updater(edge_collection_name='e')
@@ -765,9 +760,9 @@ def test_batch_noop_merge(arango_db):
 
     Also check collection name and collection type.
     """
-    arango_db.create_collection('v')
-    arango_db.create_collection('e', edge=True)
-    col = arango_db.create_collection('m', edge=True)
+    create_timetravel_collection(arango_db, 'v')
+    create_timetravel_collection(arango_db, 'e', edge=True)
+    col = create_timetravel_collection(arango_db, 'm', edge=True)
     att = ArangoBatchTimeTravellingDB(
         arango_db, 'v', default_edge_collection='e', merge_collection='m')
     b = att.get_batch_updater(edge_collection_name='m')
@@ -784,19 +779,19 @@ def test_batch_fail_get_batch_updater(arango_db):
     """
     Test failure to get batch updater due ot unknown edge collection.
     """
-    arango_db.create_collection('v')
-    arango_db.create_collection('e', edge=True)
+    create_timetravel_collection(arango_db, 'v')
+    create_timetravel_collection(arango_db, 'e', edge=True)
     att = ArangoBatchTimeTravellingDB(arango_db, 'v', default_edge_collection='e')
     
-    _check_exception(lambda: att.get_batch_updater('v'), ValueError,
+    check_exception(lambda: att.get_batch_updater('v'), ValueError,
         'Edge collection v was not registered at initialization')
     
 def test_batch_create_vertices(arango_db):
     """
     Test creating 2 vertices in one batch.
     """
-    col = arango_db.create_collection('v')
-    arango_db.create_collection('e', edge=True)
+    col = create_timetravel_collection(arango_db, 'v')
+    create_timetravel_collection(arango_db, 'e', edge=True)
     att = ArangoBatchTimeTravellingDB(arango_db, 'v', default_edge_collection='e')
     
     b = att.get_batch_updater()
@@ -831,27 +826,27 @@ def test_batch_create_vertices(arango_db):
          'last_version': 'ver2',
          'foo': 'bar1'}
     ]
-    _check_docs(arango_db, expected, 'v')
+    check_docs(arango_db, expected, 'v')
 
 def test_batch_create_vertex_fail_not_vertex_collection(arango_db):
     """
     Test failing to add a vertex to a batch updater as the batch updater is for edges.
     """
-    arango_db.create_collection('v')
-    arango_db.create_collection('e', edge=True)
+    create_timetravel_collection(arango_db, 'v')
+    create_timetravel_collection(arango_db, 'e', edge=True)
     att = ArangoBatchTimeTravellingDB(arango_db, 'v', default_edge_collection='e')
 
     b = att.get_batch_updater('e')
 
-    _check_exception(lambda: b.create_vertex('i', 'v', 6, {}), ValueError,
+    check_exception(lambda: b.create_vertex('i', 'v', 6, {}), ValueError,
         'Batch updater is configured for an edge collection')
 
 def test_batch_create_edges(arango_db):
     """
     Test creating 2 edges in one batch.
     """
-    arango_db.create_collection('v')
-    col = arango_db.create_collection('e', edge=True)
+    create_timetravel_collection(arango_db, 'v')
+    col = create_timetravel_collection(arango_db, 'e', edge=True)
     att = ArangoBatchTimeTravellingDB(arango_db, 'v', default_edge_collection='e')
     
     b = att.get_batch_updater('e')
@@ -906,7 +901,7 @@ def test_batch_create_edges(arango_db):
          'last_version': 'ver2',
          'foo': 'bar1'}
     ]
-    _check_docs(arango_db, expected, 'e')
+    check_docs(arango_db, expected, 'e')
 
 def test_batch_create_mergeedge(arango_db):
     """
@@ -914,9 +909,9 @@ def test_batch_create_mergeedge(arango_db):
 
     Could be tests for calling multiple methods on merge edges but that seems like overkill.
     """
-    arango_db.create_collection('v')
-    arango_db.create_collection('e', edge=True)
-    col = arango_db.create_collection('m', edge=True)
+    create_timetravel_collection(arango_db, 'v')
+    create_timetravel_collection(arango_db, 'e', edge=True)
+    col = create_timetravel_collection(arango_db, 'm', edge=True)
     att = ArangoBatchTimeTravellingDB(
         arango_db, 'v', default_edge_collection='e', merge_collection='m')
     
@@ -951,27 +946,27 @@ def test_batch_create_mergeedge(arango_db):
          'id': 'id1',
          'last_version': 'ver1'}
     ]
-    _check_docs(arango_db, expected, 'm')
+    check_docs(arango_db, expected, 'm')
 
 def test_batch_create_edge_fail_not_edge_collection(arango_db):
     """
     Test failing to add a edge to a batch updater as the batch updater is for vertices.
     """
-    arango_db.create_collection('v')
-    arango_db.create_collection('e', edge=True)
+    create_timetravel_collection(arango_db, 'v')
+    create_timetravel_collection(arango_db, 'e', edge=True)
     att = ArangoBatchTimeTravellingDB(arango_db, 'v', default_edge_collection='e')
 
     b = att.get_batch_updater()
 
-    _check_exception(lambda: b.create_edge('i', {}, {}, 'v', 6, {}), ValueError,
+    check_exception(lambda: b.create_edge('i', {}, {}, 'v', 6, {}), ValueError,
         'Batch updater is configured for a vertex collection')
 
 def test_batch_set_last_version_on_vertex(arango_db):
     """
     Test setting the last version on vertices.
     """
-    col = arango_db.create_collection('v')
-    arango_db.create_collection('e', edge=True)
+    col = create_timetravel_collection(arango_db, 'v')
+    create_timetravel_collection(arango_db, 'e', edge=True)
 
     expected = [{'_id': 'v/1', '_key': '1', 'id': 'foo', 'last_version': '1'},
                 {'_id': 'v/2', '_key': '2', 'id': 'bar', 'last_version': '1'},
@@ -986,7 +981,7 @@ def test_batch_set_last_version_on_vertex(arango_db):
     b.set_last_version_on_vertex('1', '2')
     b.set_last_version_on_vertex('2', '2')
 
-    _check_docs(arango_db, expected, 'v') # expect no changes
+    check_docs(arango_db, expected, 'v') # expect no changes
 
     assert b.count() == 2
 
@@ -997,28 +992,28 @@ def test_batch_set_last_version_on_vertex(arango_db):
                 {'_id': 'v/2', '_key': '2', 'id': 'bar', 'last_version': '2'},
                 {'_id': 'v/3', '_key': '3', 'id': 'baz', 'last_version': '1'},
                 ]
-    _check_docs(arango_db, expected, 'v')
+    check_docs(arango_db, expected, 'v')
 
 def test_batch_set_last_version_on_vertex_fail_not_vertex_collection(arango_db):
     """
     Test failing to set the last version on a vertex in a batch updater as the batch updater is
     for edges.
     """
-    arango_db.create_collection('v')
-    arango_db.create_collection('e', edge=True)
+    create_timetravel_collection(arango_db, 'v')
+    create_timetravel_collection(arango_db, 'e', edge=True)
     att = ArangoBatchTimeTravellingDB(arango_db, 'v', default_edge_collection='e')
 
     b = att.get_batch_updater('e')
 
-    _check_exception(lambda: b.set_last_version_on_vertex('k', 'v'), ValueError,
+    check_exception(lambda: b.set_last_version_on_vertex('k', 'v'), ValueError,
         'Batch updater is configured for an edge collection')
 
 def test_batch_set_last_version_on_edge(arango_db):
     """
     Test setting the last version on edges.
     """
-    arango_db.create_collection('v')
-    col = arango_db.create_collection('e', edge=True)
+    create_timetravel_collection(arango_db, 'v')
+    col = create_timetravel_collection(arango_db, 'e', edge=True)
 
     expected = [{'_id': 'e/1', '_key': '1', '_from': 'v/2', '_to': 'v/1', 'id': 'foo',
                  'last_version': '1'},
@@ -1038,7 +1033,7 @@ def test_batch_set_last_version_on_edge(arango_db):
     b.set_last_version_on_edge({'_key': '1', '_from': 'v/2', '_to': 'v/1'}, '2')
     b.set_last_version_on_edge({'_key': '2', '_from': 'v/2', '_to': 'v/1'}, '2')
 
-    _check_docs(arango_db, expected, 'e') # expect no changes
+    check_docs(arango_db, expected, 'e') # expect no changes
 
     assert b.count() == 2
     b.update()
@@ -1051,28 +1046,28 @@ def test_batch_set_last_version_on_edge(arango_db):
                 {'_id': 'e/3', '_key': '3', '_from': 'v/2', '_to': 'v/1', 'id': 'baz',
                  'last_version': '1'},
                 ]
-    _check_docs(arango_db, expected, 'e')
+    check_docs(arango_db, expected, 'e')
 
 def test_batch_set_last_version_on_edge_fail_not_edge_collection(arango_db):
     """
     Test failing to set the last version on an edge in a batch updater as the batch updater is
     for vertices.
     """
-    arango_db.create_collection('v')
-    arango_db.create_collection('e', edge=True)
+    create_timetravel_collection(arango_db, 'v')
+    create_timetravel_collection(arango_db, 'e', edge=True)
     att = ArangoBatchTimeTravellingDB(arango_db, 'v', default_edge_collection='e')
 
     b = att.get_batch_updater()
 
-    _check_exception(lambda: b.set_last_version_on_edge({}, '2'), ValueError,
+    check_exception(lambda: b.set_last_version_on_edge({}, '2'), ValueError,
         'Batch updater is configured for a vertex collection')
 
 def test_batch_expire_vertex(arango_db):
     """
     Test expiring vertices.
     """
-    col = arango_db.create_collection('v')
-    arango_db.create_collection('e', edge=True)
+    col = create_timetravel_collection(arango_db, 'v')
+    create_timetravel_collection(arango_db, 'e', edge=True)
 
     expected = [{'_id': 'v/1', '_key': '1', 'id': 'foo', 'expired': 1000},
                 {'_id': 'v/2', '_key': '2', 'id': 'bar', 'expired': 1000},
@@ -1087,7 +1082,7 @@ def test_batch_expire_vertex(arango_db):
     b.expire_vertex('1', 500)
     b.expire_vertex('2', 500)
 
-    _check_docs(arango_db, expected, 'v') # expect no changes
+    check_docs(arango_db, expected, 'v') # expect no changes
 
     assert b.count() == 2
     b.update()
@@ -1097,28 +1092,28 @@ def test_batch_expire_vertex(arango_db):
                 {'_id': 'v/2', '_key': '2', 'id': 'bar', 'expired': 500},
                 {'_id': 'v/3', '_key': '3', 'id': 'baz', 'expired': 1000},
                 ]
-    _check_docs(arango_db, expected, 'v')
+    check_docs(arango_db, expected, 'v')
 
 def test_batch_expire_vertex_fail_not_vertex_collection(arango_db):
     """
     Test failing to expire a vertex in a batch updater as the batch updater is
     for edges.
     """
-    arango_db.create_collection('v')
-    arango_db.create_collection('e', edge=True)
+    create_timetravel_collection(arango_db, 'v')
+    create_timetravel_collection(arango_db, 'e', edge=True)
     att = ArangoBatchTimeTravellingDB(arango_db, 'v', default_edge_collection='e')
 
     b = att.get_batch_updater('e')
 
-    _check_exception(lambda: b.expire_vertex('k', 1), ValueError,
+    check_exception(lambda: b.expire_vertex('k', 1), ValueError,
         'Batch updater is configured for an edge collection')
 
 def test_batch_expire_edge(arango_db):
     """
     Test expiring edges.
     """
-    arango_db.create_collection('v')
-    col = arango_db.create_collection('e', edge=True)
+    create_timetravel_collection(arango_db, 'v')
+    col = create_timetravel_collection(arango_db, 'e', edge=True)
 
     expected = [{'_id': 'e/1', '_key': '1', '_from': 'v/2', '_to': 'v/1', 'id': 'foo',
                  'expired': 1000},
@@ -1138,7 +1133,7 @@ def test_batch_expire_edge(arango_db):
     b.expire_edge({'_key': '1', '_from': 'v/2', '_to': 'v/1'}, 500)
     b.expire_edge({'_key': '2', '_from': 'v/2', '_to': 'v/1'}, 500)
 
-    _check_docs(arango_db, expected, 'e') # expect no changes
+    check_docs(arango_db, expected, 'e') # expect no changes
 
     assert b.count() == 2
     b.update()
@@ -1151,42 +1146,28 @@ def test_batch_expire_edge(arango_db):
                 {'_id': 'e/3', '_key': '3', '_from': 'v/2', '_to': 'v/1', 'id': 'baz',
                  'expired': 1000},
                 ]
-    _check_docs(arango_db, expected, 'e')
+    check_docs(arango_db, expected, 'e')
 
 def test_batch_expire_edge_fail_not_edge_collection(arango_db):
     """
     Test failing to set the last version on an edge in a batch updater as the batch updater is
     for vertices.
     """
-    arango_db.create_collection('v')
-    arango_db.create_collection('e', edge=True)
+    create_timetravel_collection(arango_db, 'v')
+    create_timetravel_collection(arango_db, 'e', edge=True)
     att = ArangoBatchTimeTravellingDB(arango_db, 'v', default_edge_collection='e')
 
     b = att.get_batch_updater()
 
-    _check_exception(lambda: b.expire_edge({}, 1), ValueError,
+    check_exception(lambda: b.expire_edge({}, 1), ValueError,
         'Batch updater is configured for a vertex collection')
 
 ####################################
 # Helper funcs
 ####################################
 
-def _check_docs(arango_db, docs, collection):
-    col = arango_db.collection(collection)
-    for d in docs:
-        doc = col.get(d['_key'])
-        del doc['_rev']
-        assert d == doc
-
 def _check_no_fake_changes(arango_db):
     fake_nodes = [{'_key': '1', '_id': 'fake/1', 'id': 'bat', 'created': 100, 'expired': 9000},
                   {'_key': '2', '_id': 'fake/2', 'id': 'baz', 'created': 100, 'expired': 9000},
                   ]
-    _check_docs(arango_db, fake_nodes, 'fake')
-
-def _check_exception(action, exception, message):
-    try:
-        action()
-        assert 0, "Expected exception"
-    except exception as e:
-        assert e.args[0] == message
+    check_docs(arango_db, fake_nodes, 'fake')
