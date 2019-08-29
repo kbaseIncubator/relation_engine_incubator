@@ -21,12 +21,22 @@ a readme file with a name keyed to the script, or embedded in the script.
 
 ## Time Travelling Loaders
 
-There are two types of loaders supported in this repo, bulk loaders and delta loaders. Bulk loaders
-are used to load the first instance of a graph in to the RE. From then on, delta loaders must be
-used to compare the next graph instance to the prior instance and calculate and apply the
-difference between the two graphs to the RE.
+There are two types of loaders supported in this repo, bulk loaders and delta loaders.
 
-Theoretically, the delta loader could be used to load the first instance of the graph as well,
+### Bulk loaders
+
+Bulk loaders create load files suitable for importing into ArangoDB using `arangoimport` and are
+used to load the first instance of a graph into the RE.
+
+When loading edges collections, the `--from-collection-prefix` and `--to-collection-prefix`
+arguments must be used to specify the name of the node collection(s) to which the edges connect.
+
+### Delta loaders
+
+After the initial load, delta loaders must be used to compare the next graph instance to the
+prior instance and calculate and apply the difference between the two graphs to the RE.
+
+For small graphs the delta loader can be used to load the first instance of the graph as well,
 but since it will perform numerous unnecessary queries against the database to do the graph
 comparison, the bulk loader is typically faster.
 
@@ -44,8 +54,6 @@ fast even with the delta loader.
 Delta loader: `relation_engine/ontologies/obograph/loaders/obograph_delta_loader.py`
 
 ### Requirements
-
-For the the delta loader to operate efficiently:
 
 * ArangoDB must be version 3.5.0+
 * All node and edge collections must have the following persistent indexes

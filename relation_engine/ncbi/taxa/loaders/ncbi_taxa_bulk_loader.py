@@ -7,13 +7,11 @@
 # It should only be used for an initial load into the DB; delta loads for subsequent tax dumps
 # should be handled by the delta load script.
 
-# The script requires four inputs:
+# The script requires three inputs:
 # 1) The directory containing the unzipped taxa dump
-# 2) The name of the ADB collection in which the taxa nodes will be loaded
-#    (this is used to create the _from and _to fields in the edges)
-# 3) The version of the load - this is also expected to be unique between this base load and
+# 2) The version of the load - this is also expected to be unique between this base load and
 #    any delta loads.
-# 4) The time stamp for the load in unix epoch milliseconds - all nodes and edges will be marked
+# 3) The time stamp for the load in unix epoch milliseconds - all nodes and edges will be marked
 #    with this timestamp as the creation date.
 
 # The script creates two JSON files for uploading into Arango:   
@@ -43,10 +41,6 @@ def parse_args():
     parser.add_argument('--dir', required=True,
                         help='the directory containing the unzipped dump files')
     parser.add_argument(
-        '--node-collection',
-        required=True,
-        help='the name of the ArangoDB collection into which taxa nodes will be loaded')
-    parser.add_argument(
         '--load-version',
         required=True,
         help='the version of this load. This version will be added to a field in the nodes and ' +
@@ -74,7 +68,7 @@ def main():
 
     with open(nodes) as infile, open(edges_out, 'w') as edgef:
         edgeprov = NCBIEdgeProvider(infile)
-        process_edges(edgeprov, a.node_collection, a.load_version, a.load_timestamp, edgef)
+        process_edges(edgeprov, a.load_version, a.load_timestamp, edgef)
 
 if __name__  == '__main__':
     main()
