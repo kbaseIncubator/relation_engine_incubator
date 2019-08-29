@@ -347,40 +347,15 @@ class ArangoBatchTimeTravellingDB:
         self._expire_extant_document_without_last_version(timestamp, version, col)
     
     def _expire_extant_document_without_last_version(self, timestamp, version, col):
-        use_workaround = True # https://github.com/arangodb/arangodb/issues/9800
-        if use_workaround:
-            cur = self._database.aql.execute(
-                f"""
-                FOR d IN @@col
-                    FILTER d.{_FLD_EXPIRED} >= @timestamp && d.{_FLD_CREATED} <= @timestamp
-                    FILTER d.{_FLD_VER_LST} != @version
-                    RETURN KEEP(d, "{_FLD_KEY}", "{_FLD_FROM}", "{_FLD_TO}")
-                """,
-                bind_vars={'version': version, 'timestamp': timestamp, '@col': col.name},
-            )
-            # We'll assume here that this will return < 1M docs, which should fit ok in memory,
-            # maybe 100B each
-            # Anyway hopefully this workaround will be temporary
-            # Race condition city here
-            try:
-                updates = []
-                for d in cur:
-                    d[_FLD_EXPIRED] = timestamp
-                    updates.append(d)
-            finally:
-                cur.close(ignore_missing=True)
-            col.import_bulk(updates, on_duplicate="update")
-
-        else: 
-            self._database.aql.execute(
-            f"""
-            FOR d IN @@col
-                FILTER d.{_FLD_EXPIRED} >= @timestamp && d.{_FLD_CREATED} <= @timestamp
-                FILTER d.{_FLD_VER_LST} != @version
-                UPDATE d WITH {{{_FLD_EXPIRED}: @timestamp}} IN @@col
-            """,
-            bind_vars={'version': version, 'timestamp': timestamp, '@col': col.name},
-            )
+        self._database.aql.execute(
+        f"""
+        FOR d IN @@col
+            FILTER d.{_FLD_EXPIRED} >= @timestamp && d.{_FLD_CREATED} <= @timestamp
+            FILTER d.{_FLD_VER_LST} != @version
+            UPDATE d WITH {{{_FLD_EXPIRED}: @timestamp}} IN @@col
+        """,
+        bind_vars={'version': version, 'timestamp': timestamp, '@col': col.name},
+        )
 
     # mutates in place!
     def _clean(self, obj):
