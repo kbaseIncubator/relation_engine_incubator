@@ -11,6 +11,8 @@
 
 from relation_engine.batchload.time_travelling_database import ArangoBatchTimeTravellingDB
 from relation_engine.batchload.delta_load import load_graph_delta
+from relation_engine.batchload.test.test_helpers import create_timetravel_collection
+from relation_engine.batchload.test.test_helpers import check_docs, check_exception
 from arango import ArangoClient
 from pytest import fixture
 
@@ -37,13 +39,13 @@ def test_merge_setup_fail(arango_db):
     Tests that the algorithm fails to start if a merge source is specified but a merge collection
     is not
     """
-    arango_db.create_collection('v')
-    arango_db.create_collection('e', edge=True)
+    create_timetravel_collection(arango_db, 'v')
+    create_timetravel_collection(arango_db, 'e', edge=True)
 
     att = ArangoBatchTimeTravellingDB(arango_db, 'v', default_edge_collection='e')
 
     # sources are fake, but real not necessary to trigger error
-    _check_exception(lambda: load_graph_delta([], [], att, 1, "2", merge_source=[{}]),
+    check_exception(lambda: load_graph_delta([], [], att, 1, "2", merge_source=[{}]),
         ValueError, 'A merge source is specified but the database has no merge collection')
 
 def test_load_no_merge_source_batch_2(arango_db):
@@ -57,10 +59,10 @@ def _load_no_merge_source(arango_db, batchsize):
     Test delta loading a small graph, including deleted, updated, unchanged, and new nodes and
     edges.
     """
-    vcol = arango_db.create_collection('v')
-    def_ecol = arango_db.create_collection('def_e', edge=True)
-    e1col = arango_db.create_collection('e1', edge=True)
-    e2col = arango_db.create_collection('e2', edge=True)
+    vcol = create_timetravel_collection(arango_db, 'v')
+    def_ecol = create_timetravel_collection(arango_db, 'def_e', edge=True)
+    e1col = create_timetravel_collection(arango_db, 'e1', edge=True)
+    e2col = create_timetravel_collection(arango_db, 'e2', edge=True)
 
     _import_bulk(
         vcol,
@@ -176,7 +178,7 @@ def _load_no_merge_source(arango_db, batchsize):
          'data': ['old', 'data1']},
     ]
 
-    _check_docs(arango_db, vexpected, 'v')
+    check_docs(arango_db, vexpected, 'v')
 
     def_e_expected = [
         {'id': 'expire', 'from': 'expire', 'to': 'same2',
@@ -205,7 +207,7 @@ def _load_no_merge_source(arango_db, batchsize):
          'data': 'bar'},
     ]
 
-    _check_docs(arango_db, def_e_expected, 'def_e')
+    check_docs(arango_db, def_e_expected, 'def_e')
 
     e1_expected = [
         {'id': 'old', 'from': 'old', 'to': 'same1',
@@ -218,7 +220,7 @@ def _load_no_merge_source(arango_db, batchsize):
          'data': 'bing'},
     ]
 
-    _check_docs(arango_db, e1_expected, 'e1')
+    check_docs(arango_db, e1_expected, 'e1')
 
     e2_expected = [
         {'id': 'change', 'from': 'same1', 'to': 'same2',
@@ -239,16 +241,16 @@ def _load_no_merge_source(arango_db, batchsize):
          'data': 'boof'},
     ]
 
-    _check_docs(arango_db, e2_expected, 'e2')
+    check_docs(arango_db, e2_expected, 'e2')
 
 def test_merge_edges(arango_db):
     """
     Test that merge edges are handled appropriately.
     """
 
-    vcol = arango_db.create_collection('v')
-    ecol = arango_db.create_collection('e', edge=True)
-    arango_db.create_collection('m', edge=True)
+    vcol = create_timetravel_collection(arango_db, 'v')
+    ecol = create_timetravel_collection(arango_db, 'e', edge=True)
+    create_timetravel_collection(arango_db, 'm', edge=True)
     
     _import_bulk(
         vcol,
@@ -299,7 +301,7 @@ def test_merge_edges(arango_db):
          'data': 'baz'},
     ]
 
-    _check_docs(arango_db, vexpected, 'v')
+    check_docs(arango_db, vexpected, 'v')
 
     e_expected = [
         {'id': 'to_m', 'from': 'root', 'to': 'merged',
@@ -312,7 +314,7 @@ def test_merge_edges(arango_db):
          'data': 'bar'},
     ]
 
-    _check_docs(arango_db, e_expected, 'e')
+    check_docs(arango_db, e_expected, 'e')
 
     m_expected = [
         {'id': 'm_to_t', 'from': 'merged', 'to': 'target',
@@ -321,7 +323,7 @@ def test_merge_edges(arango_db):
          'data': 'woo'},
     ]
 
-    _check_docs(arango_db, m_expected, 'm')
+    check_docs(arango_db, m_expected, 'm')
 
 # modifies docs in place!
 # vert_col_name != None implies an edge
@@ -344,18 +346,3 @@ def _import_bulk(
         d['first_version'] = first_version
         d['last_version'] = last_version
     col.import_bulk(docs)
-
-def _check_exception(action, exception, message):
-    try:
-        action()
-        assert 0, "Expected exception"
-    except exception as e:
-        assert e.args[0] == message
-
-def _check_docs(arango_db, docs, collection):
-    col = arango_db.collection(collection)
-    assert col.count() == len(docs), 'Incorrect # of docs in collection ' + collection
-    for d in docs:
-        doc = col.get(d['_key'])
-        del doc['_rev']
-        assert d == doc

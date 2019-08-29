@@ -75,6 +75,51 @@ class ArangoBatchTimeTravellingDB:
 
         self._edgecols = {n: self._get_col(n, edge=True) for n in edgecols}
 
+        self._id_indexes = self._check_indexes()
+
+    def _check_indexes(self):
+        # check indexes and store names of required indexes
+        cols = [self._vertex_collection] + list(self._edgecols.values())
+        if self.get_merge_collection():
+            cols.append(self._merge_collection)
+        
+        id_indexes = {}
+        for col in cols:
+            idx = col.indexes() # http request
+            id_indexes[col.name] = self._get_index_name(col.name, self._ID_EXP_CRE_INDEX, idx)
+            # check the other required index exists. Don't need to store it for later though
+            self._get_index_name(col.name, self._EXP_CRE_LAST_VER_INDEX, idx)
+        
+        return id_indexes
+
+    _ID_EXP_CRE_INDEX = {
+        'type': 'persistent',
+        'fields': [_FLD_ID, _FLD_EXPIRED, _FLD_CREATED],
+        'sparse': False,
+        'unique': False
+        }
+
+    _EXP_CRE_LAST_VER_INDEX = {
+        'type': 'persistent',
+        'fields': [_FLD_EXPIRED, _FLD_CREATED, _FLD_VER_LST],
+        'sparse': False,
+        'unique': False
+    }
+
+    def _get_index_name(self, col_name, index_spec, indexes):
+        for idx in indexes:
+            if not self._is_index_equivalent(index_spec, idx):
+                continue
+            return idx['name']
+        raise ValueError(f'Collection {col_name} is missing required index with ' +
+            f'specification {index_spec}')
+
+    def _is_index_equivalent(self, index_spec, index):
+        for field in index_spec:
+            if index_spec[field] != index.get(field):
+                return False
+        return True
+
     # if an edge is inserted into a non-edge collection _from and _to are silently dropped
     def _get_col(self, collection, edge=False):
         c = self._database.collection(collection)
@@ -125,14 +170,16 @@ class ArangoBatchTimeTravellingDB:
         return self._get_documents(ids, timestamp, col_name)
 
     def _get_documents(self, ids, timestamp, collection_name):
+        id_idx = self._id_indexes[collection_name]
         cur = self._database.aql.execute(
           f"""
           FOR d IN @@col
+              OPTIONS {{indexHint: @id_idx, forceIndexHint: true}}
               FILTER d.{_FLD_ID} IN @ids
               FILTER d.{_FLD_EXPIRED} >= @timestamp AND d.{_FLD_CREATED} <= @timestamp
               RETURN d
           """,
-          bind_vars={'ids': ids, 'timestamp': timestamp, '@col': collection_name}
+          bind_vars={'ids': ids, 'timestamp': timestamp, '@col': collection_name, 'id_idx': id_idx}
         )
         ret = {}
         try:
