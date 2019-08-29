@@ -9,13 +9,11 @@
 # It should only be used for an initial load into the DB; delta loads for subsequent tax dumps
 # should be handled by the delta load script.
 
-# The script requires four inputs:
+# The script requires three inputs:
 # 1) The directory containing the unzipped taxa dump
-# 2) The name of the ADB collection in which the taxa nodes will be loaded
-#    (this is used to create the _from and _to fields in the edges)
-# 3) The version of the load - this is also expected to be unique between this base load and
+# 2) The version of the load - this is also expected to be unique between this base load and
 #    any delta loads.
-# 4) The time stamp for the load in unix epoch milliseconds - all nodes and edges will be marked
+# 3) The time stamp for the load in unix epoch milliseconds - all nodes and edges will be marked
 #    with this timestamp as the creation date.
 
 # The script creates two JSON files for uploading into Arango:   
@@ -44,10 +42,6 @@ def parse_args():
         description='Create ArangoDB bulk load files from an NCBI taxa dump.')
     parser.add_argument('--dir', required=True,
                         help='the directory containing the unzipped dump files')
-    parser.add_argument(
-        '--node-collection',
-        required=True,
-        help='the name of the ArangoDB collection into which taxa nodes will be loaded')
     parser.add_argument(
         '--load-version',
         required=True,
@@ -83,7 +77,7 @@ def main():
         }
         edgeprov = NCBIEdgeProvider(infile)
         for e in edgeprov:
-            e = process_edge(e, a.node_collection, a.load_version, a.load_timestamp)
+            e = process_edge(e, a.load_version, a.load_timestamp)
             fileno = int(e['id']) % 3 + 1
             files[fileno].write(json.dumps(e) + '\n')
 
