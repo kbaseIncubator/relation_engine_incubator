@@ -60,22 +60,33 @@ class OBOGraphLoader:
     providers suitable for feeding into a delta load time travelling algorithm.
     """
 
-    def __init__(self, obo, ontology_id_prefix):
+    def __init__(self, obo, ontology_id_prefix, graph_id=None):
         """
         Create the loader.
         obojson - the OBO graph as loaded from the JSON file.
         ontology_id_prefix - the ID prefix of the ontology to be loaded, e.g. GO or ENVO. This
           is used to exclude nodes and edges that are not part of the ontology.
+        graph_id - the ID of the graph in the OBOgraph to load. If there is only one graph this
+          may be ommitted.
         """
-        if len(obo[_OBO_GRAPHS]) > 1:
+        if graph_id:
+            self._obo = self._get_graph(obo, graph_id)
+        elif len(obo[_OBO_GRAPHS]) > 1:
             raise ValueError('Found more than one graph in the OBO file.')
-        self._obo = obo[_OBO_GRAPHS][0]
+        else:
+            self._obo = obo[_OBO_GRAPHS][0]
         unknown_types = {n[_OBO_TYPE] for n in self._obo[_OBO_NODES]} - _OBO_TYPES
         if unknown_types:
             raise ValueError(f'Found unprocessable node types {unknown_types}')
         self._property_map = {n[_OBO_ID]: n[_OBO_LABEL] for n in self._obo[_OBO_NODES]
             if n[_OBO_TYPE] == _OBO_TYPE_PROPERTY}
         self._ont_prefix = ontology_id_prefix
+
+    def _get_graph(self, obo, graph_id):
+        for g in obo[_OBO_GRAPHS]:
+            if g[_OBO_ID] == graph_id:
+                return g
+        raise ValueError(f'There is no graph with id {graph_id}')
 
     def _strip_url(self, string):
         """

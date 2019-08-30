@@ -67,6 +67,10 @@ the changes between the prior load and the current load, and retaining the prior
              'or edges created in this load will start to exist with this time stamp. ' +
              'NOTE: the user is responsible for ensuring this timestamp is greater than any ' +
              'other timestamps previously used to load data into the NCBI taxonomy DB.')
+    parser.add_argument(
+        '--graph-id',
+        help='if there are multiple graphs in the OBOGraph file, specify the full ID of the ' +
+            'graph to be processed. If there is only one graph this flag may be omitted.')
 
     return parser.parse_args()
 
@@ -93,7 +97,7 @@ def main():
     with open(a.file) as f:
         obograph = json.loads(f.read())
     
-    loader = OBOGraphLoader(obograph, a.onto_id_prefix)
+    loader = OBOGraphLoader(obograph, a.onto_id_prefix, graph_id=a.graph_id)
 
     load_graph_delta(
         loader.get_node_provider(),
