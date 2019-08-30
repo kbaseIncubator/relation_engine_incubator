@@ -6,8 +6,10 @@ So far this has only been run with GO Basic.
 
 # TODO TEST
 # TODO DOCS better documentation.
+# TODO NOW reload GO and see if anything changes
 
 import json as _json
+from urllib.parse import urlparse
 
 _OBO_GRAPHS = 'graphs'
 _OBO_NODES = 'nodes'
@@ -78,14 +80,20 @@ class OBOGraphLoader:
     def _strip_url(self, string):
         """
         Some strings (like ontology IDs) can be full URLs.
-        This function checks to see if any slashes are in the string and if so takes the last
-        portion of the string.
+        This function checks to see if the string looks like a http or https url and if so,
+        returns the fragment or the last entry in the path if there is no fragment.
+        Otherwise it returns the string as is.
         """
-        return string.split('/')[-1].strip()
+        u = urlparse(string)
+        if u.scheme != 'http' and u.scheme != 'https':
+            return string
+        if u.fragment:
+            return u.fragment
+        return u.path.split('/')[-1].strip()
 
     def _get_meta_property(self, meta, metakey, target_predicates):
         # totally inefficient but probably doesn't matter
-        if metakey not in meta:
+        if not meta or metakey not in meta:
             return None
         for d in meta[metakey]:
             pred = d[_OBO_PREDICATE]
@@ -98,7 +106,7 @@ class OBOGraphLoader:
     def _get_meta_properties(self, meta, metakey, target_predicates):
         # totally inefficient but probably doesn't matter
         ret = []
-        if metakey not in meta:
+        if not meta or metakey not in meta:
             return ret
         for d in meta[metakey]:
             pred = d[_OBO_PREDICATE]
@@ -123,7 +131,7 @@ class OBOGraphLoader:
             return False
         meta = n.get(_OBO_META)
         if not meta:
-            raise ValueError(f'No {_OBO_META} field found for node ID {id_}')
+            return True
         if not deprecated_ok and meta.get(_OBO_DEPRECATED):
             # may want some sort of special loader for loading pre-expired deprecated nodes
             # needs more thought
@@ -139,7 +147,7 @@ class OBOGraphLoader:
                 continue
             id_ = self._strip_url(n[_OBO_ID])
             meta = n.get(_OBO_META)
-            defi = meta.get(_OBO_DEFINITION)
+            defi = meta.get(_OBO_DEFINITION) if meta else None
             if defi:
                 defi.pop(_OBO_META, None)
 
@@ -150,11 +158,11 @@ class OBOGraphLoader:
                    _OUT_ALTERNATIVE_IDS: self._get_meta_properties(
                        meta, _OBO_BASIC_PROPS, _OBO_ALTERNATIVE_IDS),
                    _OUT_DEFINITION: defi,
-                   _OUT_COMMENTS: meta.get(_OBO_COMMENTS, []),
-                   _OUT_SUBSETS: meta.get(_OBO_SUBSETS, []),
+                   _OUT_COMMENTS: meta.get(_OBO_COMMENTS, []) if meta else [],
+                   _OUT_SUBSETS: meta.get(_OBO_SUBSETS, []) if meta else [],
                    # may need to translate pred for sys and xrefs? I don't see anything in GO basic
-                   _OUT_SYNONYMS: self._clean_meta(meta.get(_OBO_SYNONYMS, [])),
-                   _OUT_XREFS: self._clean_meta(meta.get(_OBO_XREFS, [])),
+                   _OUT_SYNONYMS: self._clean_meta(meta.get(_OBO_SYNONYMS, [])) if meta else [],
+                   _OUT_XREFS: self._clean_meta(meta.get(_OBO_XREFS, [])) if meta else [], 
                    }
             yield ret
 
@@ -191,12 +199,18 @@ class OBOGraphLoader:
         # At least in GO, edges don't contact deprecated nodes
         # Might need to build up a list of deprecated IDs for other ontologies, or GO later
         for e in self._obo[_OBO_EDGES]:
-            from_ = self._strip_url(e[_OBO_SUBJECT])
-            to = self._strip_url(e[_OBO_OBJECT])
+            sub = e[_OBO_SUBJECT]
+            obj = e[_OBO_OBJECT]
+            if sub in self._property_map or obj in self._property_map:
+                continue # property edge, ignore
+            from_ = self._strip_url(sub)
+            to = self._strip_url(obj)
             if not from_.startswith(self._ont_prefix) or not to.startswith(self._ont_prefix):
                 continue
             pred = e[_OBO_PREDICATE]
             if pred in self._property_map:
                 pred = self._property_map[pred]
+            else:
+                pred = self._strip_url(pred)
             yield self._to_edge(from_, to, pred)
 
