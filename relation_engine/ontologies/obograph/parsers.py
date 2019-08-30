@@ -17,7 +17,8 @@ _OBO_EDGES = 'edges'
 _OBO_TYPE = 'type'
 _OBO_TYPE_CLASS = 'CLASS'
 _OBO_TYPE_PROPERTY = 'PROPERTY'
-_OBO_TYPES = frozenset([_OBO_TYPE_CLASS, _OBO_TYPE_PROPERTY])
+_OBO_TYPE_INDIVIDUAL = 'INDIVIDUAL'
+_OBO_TYPES = frozenset([_OBO_TYPE_CLASS, _OBO_TYPE_PROPERTY, _OBO_TYPE_INDIVIDUAL])
 _OBO_ID = 'id'
 _OBO_LABEL = 'lbl'
 _OBO_META = 'meta'
@@ -25,6 +26,7 @@ _OBO_DEFINITION = 'definition'
 _OBO_DEPRECATED = 'deprecated'
 _OBO_BASIC_PROPS = 'basicPropertyValues'
 _OBO_COMMENTS = 'comments'
+_OBO_COMMENT = 'comment'
 _OBO_SUBSETS = 'subsets'
 _OBO_SYNONYMS = 'synonyms'
 _OBO_XREFS = 'xrefs'
@@ -40,6 +42,7 @@ _OBO_CONSIDER = frozenset(['consider'])
 
 
 _OUT_ID = 'id'
+_OUT_NODE_TYPE = 'type'
 _OUT_FROM = 'from'
 _OUT_TO = 'to'
 _OUT_EDGE_TYPE = 'type'
@@ -75,12 +78,37 @@ class OBOGraphLoader:
             raise ValueError('Found more than one graph in the OBO file.')
         else:
             self._obo = obo[_OBO_GRAPHS][0]
-        unknown_types = {n[_OBO_TYPE] for n in self._obo[_OBO_NODES]} - _OBO_TYPES
+        
+        unknown_types = {n[_OBO_TYPE] for n in self._obo[_OBO_NODES]
+            if _OBO_TYPE in n} - _OBO_TYPES # Some ENVO nodes don't have types. AAARRARGAGGG
         if unknown_types:
             raise ValueError(f'Found unprocessable node types {unknown_types}')
-        self._property_map = {n[_OBO_ID]: n[_OBO_LABEL] for n in self._obo[_OBO_NODES]
-            if n[_OBO_TYPE] == _OBO_TYPE_PROPERTY}
         self._ont_prefix = ontology_id_prefix
+        self._property_map = self._get_property_map()
+        
+    def _get_property_map(self):
+        ret = {}
+        for n in self._obo[_OBO_NODES]:
+            # For ENVO, all the nodes without types are property types, so we include them in the
+            # property map. I really hope this holds for other ontologies
+            # may need to add a flag
+            if not n.get(_OBO_TYPE) or n[_OBO_TYPE] == _OBO_TYPE_PROPERTY:
+                if _OBO_LABEL in n:
+                    ret[n[_OBO_ID]] = n[_OBO_LABEL]
+                elif _OBO_META in n and _OBO_BASIC_PROPS in n[_OBO_META]:
+                    comments = []
+                    for p in n[_OBO_META][_OBO_BASIC_PROPS]:
+                        if self._strip_url(p[_OBO_PREDICATE]) == _OBO_COMMENT:
+                            comments.append(p[_OBO_VALUE])
+                    if len(comments) != 1:
+                        raise ValueError(f'Property node {n[_OBO_ID]} has no {_OBO_LABEL} field' +
+                            f'and {len(comments)} comments in {_OBO_META}/{_OBO_BASIC_PROPS}')
+                    else:
+                        ret[n[_OBO_ID]] = comments[0]
+                else:
+                    raise ValueError(f'Property node {n[_OBO_ID]} has no {_OBO_LABEL} ' +
+                        f'and no {_OBO_META}/{_OBO_BASIC_PROPS} fields') 
+        return ret
 
     def _get_graph(self, obo, graph_id):
         for g in obo[_OBO_GRAPHS]:
@@ -135,7 +163,7 @@ class OBOGraphLoader:
 
     def _is_valid_node(self, node, deprecated_ok=False):
         n = node
-        if n[_OBO_TYPE] != _OBO_TYPE_CLASS:
+        if n.get(_OBO_TYPE) != _OBO_TYPE_CLASS and n.get(_OBO_TYPE) != _OBO_TYPE_INDIVIDUAL:
             return False
         id_ = self._strip_url(n[_OBO_ID])
         if not id_.startswith(self._ont_prefix):
@@ -163,7 +191,8 @@ class OBOGraphLoader:
                 defi.pop(_OBO_META, None)
 
             ret = {_OUT_ID: id_,
-                   _OUT_NAME: n[_OBO_LABEL],
+                   _OUT_NODE_TYPE: n[_OBO_TYPE],
+                   _OUT_NAME: n.get(_OBO_LABEL), # some ENVO classes have no label
                    _OUT_NAMESPACE: self._get_meta_property(
                        meta, _OBO_BASIC_PROPS, _OBO_NAMESPACES),
                    _OUT_ALTERNATIVE_IDS: self._get_meta_properties(

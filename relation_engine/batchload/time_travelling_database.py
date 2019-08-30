@@ -8,6 +8,8 @@ more classes and methods can be added as needed.
 
 """
 
+# TODO CODE check id, from, and to for validity per https://www.arangodb.com/docs/stable/data-modeling-naming-conventions-document-keys.html
+
 from arango.exceptions import CursorEmptyError as _CursorEmptyError
 
 _INTERNAL_ARANGO_FIELDS = ['_rev']
