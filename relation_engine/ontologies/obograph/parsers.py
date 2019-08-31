@@ -161,11 +161,31 @@ class OBOGraphLoader:
             d.pop(_OBO_META, None)
         return docs
 
+    def _clean_obo_id(self, id_):
+        """
+        1) Calls _strip_url()
+        2) Splits on _
+        if len == 1, return
+        if len == 2 and 2nd part is an integer, reassembles with : as the sep.
+        """
+        # could also check that there's a : in the ID if split len == 1
+        idc = self._strip_url(id_)
+        idc = idc.split('_')
+        if len(idc) == 1:
+            return idc[0]
+        if len(idc) > 2:
+            raise ValueError(f'Could not parse id {id_}')
+        try:
+            int(idc[1])
+        except Exception as _:
+            raise ValueError(f'Could not parse id {id_}')
+        return f'{idc[0]}:{idc[1]}'
+
     def _is_valid_node(self, node, deprecated_ok=False):
         n = node
         if n.get(_OBO_TYPE) != _OBO_TYPE_CLASS and n.get(_OBO_TYPE) != _OBO_TYPE_INDIVIDUAL:
             return False
-        id_ = self._strip_url(n[_OBO_ID])
+        id_ = self._clean_obo_id(n[_OBO_ID])
         if not id_.startswith(self._ont_prefix):
             return False
         meta = n.get(_OBO_META)
@@ -184,7 +204,7 @@ class OBOGraphLoader:
         for n in self._obo[_OBO_NODES]:
             if not self._is_valid_node(n):
                 continue
-            id_ = self._strip_url(n[_OBO_ID])
+            id_ = self._clean_obo_id(n[_OBO_ID])
             meta = n.get(_OBO_META)
             defi = meta.get(_OBO_DEFINITION) if meta else None
             if defi:
@@ -213,13 +233,13 @@ class OBOGraphLoader:
         for n in self._obo[_OBO_NODES]:
             if not self._is_valid_node(n, deprecated_ok=True):
                 continue
-            from_ = self._strip_url(n[_OBO_ID])
+            from_ = self._clean_obo_id(n[_OBO_ID])
             meta = n.get(_OBO_META)
             for preds, outpred in [(_OBO_REPLACED_BY, _OUT_REPLACED_BY),
                                    (_OBO_CONSIDER, _OUT_CONSIDER)]:
                 for to in self._get_meta_properties(meta, _OBO_BASIC_PROPS, preds):
-                    # Some IDs are _, some are :. Wow
-                    to = self._strip_url(to).replace(':', '_')
+                    # In GO some IDs are _, some are :. Wow
+                    to = self._clean_obo_id(to)
                     # For GO to is not external. If this is untrue, check prefix and skip.
                     yield self._to_edge(from_, to, outpred)
 
@@ -243,8 +263,8 @@ class OBOGraphLoader:
             obj = e[_OBO_OBJECT]
             if sub in self._property_map or obj in self._property_map:
                 continue # property edge, ignore
-            from_ = self._strip_url(sub)
-            to = self._strip_url(obj)
+            from_ = self._clean_obo_id(sub)
+            to = self._clean_obo_id(obj)
             if not from_.startswith(self._ont_prefix) or not to.startswith(self._ont_prefix):
                 continue
             pred = e[_OBO_PREDICATE]
