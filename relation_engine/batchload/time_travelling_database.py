@@ -10,7 +10,7 @@ more classes and methods can be added as needed.
 
 # TODO CODE check id, from, and to for validity per https://www.arangodb.com/docs/stable/data-modeling-naming-conventions-document-keys.html
 
-from arango.exceptions import CursorEmptyError as _CursorEmptyError
+from arango.exceptions import AQLQueryExecuteError as _AQLQueryExecuteError
 
 _INTERNAL_ARANGO_FIELDS = ['_rev']
 
@@ -28,6 +28,18 @@ _FLD_VER_FST = 'first_version'
 _FLD_CREATED = 'created'
 _FLD_EXPIRED = 'expired'
 
+_FLD_RGSTR_LOAD_NAMESPACE = 'load_namespace'
+_FLD_RGSTR_LOAD_VERSION = 'load_version'
+_FLD_RGSTR_LOAD_TIMESTAMP = 'load_timestamp'
+_FLD_RGSTR_VERTEX_COLLECTION = 'vertex_collection'
+_FLD_RGSTR_MERGE_COLLECTION = 'merge_collection'
+_FLD_RGSTR_EDGE_COLLECTIONS = 'edge_collections'
+_FLD_RGSTR_START_TIME = 'start_time'
+_FLD_RGSTR_COMPLETE_TIME = 'completion_time'
+_FLD_RGSTR_STATE = 'state'
+_FLD_RGSTR_STATE_IN_PROGRESS = 'in_progress'
+_FLD_RGSTR_STATE_COMPLETE = 'complete'
+
 # see https://www.arangodb.com/2018/07/time-traveling-with-graph-databases/
 # in unix epoch ms this is 2255/6/5
 _MAX_ADB_INTEGER = 2**53 - 1
@@ -42,6 +54,7 @@ class ArangoBatchTimeTravellingDB:
     def __init__(
             self,
             database,
+            load_registry_collection,
             vertex_collection,
             default_edge_collection=None,
             edge_collections=None,
@@ -50,6 +63,7 @@ class ArangoBatchTimeTravellingDB:
         Create the DB interface.
 
         database - the python_arango ArangoDB database containing the data to query or modify.
+        load_registry_collection - the name of the collection where loads will be listed.
         vertex_collection - the name of the collection to use for vertex operations.
         default_edge_collection - the name of the collection to use for edge operations by default.
           This can be overridden.
@@ -74,6 +88,8 @@ class ArangoBatchTimeTravellingDB:
         if not edgecols:
             raise ValueError("At least one edge collection must be specified")
         self._vertex_collection = self._get_col(vertex_collection)
+        # TODO CODE could check if any loads are in progress for the namespace and bail if so
+        self._registry_collection = self._get_col(load_registry_collection)
 
         self._edgecols = {n: self._get_col(n, edge=True) for n in edgecols}
 
@@ -129,6 +145,58 @@ class ArangoBatchTimeTravellingDB:
             ctype = 'an edge' if edge else 'a vertex'
             raise ValueError(f'{collection} is not {ctype} collection')
         return c
+
+    def register_load_start(self, load_namespace, load_version, timestamp, current_time):
+        """
+        Register that a load is starting in the database.
+        load_namespace - the unique namespace of the data set, e.g. NCBI_TAXA, GENE_ONTOLOGY,
+          ENVO, etc.
+        load_version - the version of the load that is unique within the namespace.
+        timestamp - the timestamp in unix epoch milliseconds when the load will become active.
+        current_time - the current time in unix epoch milliseconds.
+        """
+        doc = {_FLD_KEY: load_namespace + '_' + load_version,
+               _FLD_RGSTR_START_TIME: current_time,
+               _FLD_RGSTR_LOAD_NAMESPACE: load_namespace,
+               _FLD_RGSTR_LOAD_VERSION: load_version,
+               _FLD_RGSTR_LOAD_TIMESTAMP: timestamp,
+               _FLD_RGSTR_COMPLETE_TIME: None,
+               _FLD_RGSTR_STATE: _FLD_RGSTR_STATE_IN_PROGRESS,
+               _FLD_RGSTR_VERTEX_COLLECTION: self._vertex_collection.name,
+               _FLD_RGSTR_MERGE_COLLECTION: self.get_merge_collection(),
+               _FLD_RGSTR_EDGE_COLLECTIONS: sorted(list(self._edgecols.keys()))}
+        
+        try:
+            self._database.aql.execute(
+            f'INSERT @d in @@col',
+            bind_vars={'d': doc, '@col': self._registry_collection.name}
+            )
+        except _AQLQueryExecuteError as e:
+            if e.error_code == 1210:
+                raise ValueError('Load is already registered')
+            raise e
+
+    def register_load_complete(self, load_namespace, load_version, current_time):
+        """
+        Register that a load has completed in the database.
+        load_namespace - the unique namespace of the data set, e.g. NCBI_TAXA, GENE_ONTOLOGY,
+          ENVO, etc.
+        load_version - the version of the load that is unique within the namespace.
+        current_time - the current time in unix epoch milliseconds.
+        """
+        doc = {_FLD_KEY: load_namespace + '_' + load_version,
+               _FLD_RGSTR_COMPLETE_TIME: current_time,
+               _FLD_RGSTR_STATE: _FLD_RGSTR_STATE_COMPLETE}
+        
+        try:
+            self._database.aql.execute(
+            f'UPDATE @d in @@col',
+            bind_vars={'d': doc, '@col': self._registry_collection.name}
+            )
+        except _AQLQueryExecuteError as e:
+            if e.error_code == 1202:
+                raise ValueError('Load is not registered, cannot be completed')
+            raise e
 
     def get_vertex_collection(self):
         """

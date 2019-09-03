@@ -43,6 +43,11 @@ the changes between the prior load and the current load, and retaining the prior
         help='the path to a file containing the ArangoDB password and nothing else; ' +
             'if --user is included and --pwd-file is omitted a password prompt will be presented.')
     parser.add_argument(
+        '--load-registry-collection',
+        required=True,
+        help='the name of the ArangoDB collection where the load will be registered. ' +
+            'This is typically the same collection for all delta loaded data.')
+    parser.add_argument(
         '--node-collection',
         required=True,
         help='the name of the ArangoDB collection into which ontology nodes will be loaded')
@@ -90,6 +95,7 @@ def main():
         db = client.db(a.database, verify=True)
     attdb = ArangoBatchTimeTravellingDB(
         db,
+        a.load_registry_collection,
         a.node_collection,
         default_edge_collection=a.edge_collection,
         merge_collection=a.merge_edge_collection)
