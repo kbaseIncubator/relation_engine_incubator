@@ -29,18 +29,20 @@ def arango_db():
 def test_get_vertex_collection(arango_db):
     create_timetravel_collection(arango_db, 'v')
     create_timetravel_collection(arango_db, 'e', edge=True)
+    arango_db.create_collection('reg')
 
-    att = ArangoBatchTimeTravellingDB(arango_db, 'v', default_edge_collection='e')
+    att = ArangoBatchTimeTravellingDB(arango_db, 'reg', 'v', default_edge_collection='e')
     assert att.get_vertex_collection() == 'v'
 
 def test_get_default_edge_collection(arango_db):
     create_timetravel_collection(arango_db, 'v')
     create_timetravel_collection(arango_db, 'e', edge=True)
+    arango_db.create_collection('reg')
 
-    att = ArangoBatchTimeTravellingDB(arango_db, 'v', edge_collections=['e'])
+    att = ArangoBatchTimeTravellingDB(arango_db, 'reg', 'v', edge_collections=['e'])
     assert att.get_default_edge_collection() is None
 
-    att = ArangoBatchTimeTravellingDB(arango_db, 'v', default_edge_collection='e')
+    att = ArangoBatchTimeTravellingDB(arango_db, 'reg', 'v', default_edge_collection='e')
     assert att.get_default_edge_collection() is 'e'
 
 def test_get_edge_collections(arango_db):
@@ -48,14 +50,15 @@ def test_get_edge_collections(arango_db):
     create_timetravel_collection(arango_db, 'e1', edge=True)
     create_timetravel_collection(arango_db, 'e2', edge=True)
     create_timetravel_collection(arango_db, 'e3', edge=True)
+    arango_db.create_collection('reg')
 
-    adbtt = ArangoBatchTimeTravellingDB(arango_db, 'v', default_edge_collection='e1')
+    adbtt = ArangoBatchTimeTravellingDB(arango_db, 'reg', 'v', default_edge_collection='e1')
     assert adbtt.get_edge_collections() == ['e1']
 
-    adbtt = ArangoBatchTimeTravellingDB(arango_db, 'v', edge_collections=['e2', 'e2', 'e1'])
+    adbtt = ArangoBatchTimeTravellingDB(arango_db, 'reg', 'v', edge_collections=['e2', 'e2', 'e1'])
     assert adbtt.get_edge_collections() == ['e1', 'e2']
 
-    adbtt = ArangoBatchTimeTravellingDB(arango_db, 'v', default_edge_collection='e3',
+    adbtt = ArangoBatchTimeTravellingDB(arango_db, 'reg', 'v', default_edge_collection='e3',
         edge_collections=['e2', 'e2', 'e1', 'e3'])
     assert adbtt.get_edge_collections() == ['e1', 'e2', 'e3']
 
@@ -63,51 +66,66 @@ def test_get_merge_collection(arango_db):
     create_timetravel_collection(arango_db, 'v')
     create_timetravel_collection(arango_db, 'e', edge=True)
     create_timetravel_collection(arango_db, 'm', edge=True)
+    arango_db.create_collection('reg')
 
-    att = ArangoBatchTimeTravellingDB(arango_db, 'v', default_edge_collection='e')
+    att = ArangoBatchTimeTravellingDB(arango_db, 'reg', 'v', default_edge_collection='e')
     assert att.get_merge_collection() is None
 
     att = ArangoBatchTimeTravellingDB(
-        arango_db, 'v', default_edge_collection='e', merge_collection='m')
+        arango_db, 'reg', 'v', default_edge_collection='e', merge_collection='m')
     assert att.get_merge_collection() is 'm'
 
 def test_init_fail_no_edge_collections(arango_db):
     create_timetravel_collection(arango_db, 'v')
     create_timetravel_collection(arango_db, 'm', edge=True)
+    arango_db.create_collection('reg')
 
-    check_exception(lambda: ArangoBatchTimeTravellingDB(arango_db, 'v', merge_collection='m'),
+    check_exception(lambda: ArangoBatchTimeTravellingDB(
+        arango_db, 'reg', 'v', merge_collection='m'),
         ValueError, 'At least one edge collection must be specified')
+
+def test_init_fail_bad_registry_collection(arango_db):
+    create_timetravel_collection(arango_db, 'v')
+    create_timetravel_collection(arango_db, 'e', edge=True)
+    arango_db.create_collection('reg', edge=True)
+
+    check_exception(
+        lambda: ArangoBatchTimeTravellingDB(arango_db, 'reg', 'v', default_edge_collection='e'),
+        ValueError, 'reg is not a vertex collection')
 
 def test_init_fail_bad_vertex_collection(arango_db):
     create_timetravel_collection(arango_db, 'v')
     create_timetravel_collection(arango_db, 'e', edge=True)
+    arango_db.create_collection('reg')
 
     check_exception(
-        lambda: ArangoBatchTimeTravellingDB(arango_db, 'e', default_edge_collection='e'),
+        lambda: ArangoBatchTimeTravellingDB(arango_db, 'e', 'reg', default_edge_collection='e'),
         ValueError, 'e is not a vertex collection')
-
 
 def test_init_fail_bad_edge_collection(arango_db):
     create_timetravel_collection(arango_db, 'v')
     col_name = 'edge'
     create_timetravel_collection(arango_db, col_name)
+    arango_db.create_collection('reg')
 
     check_exception(
-        lambda: ArangoBatchTimeTravellingDB(arango_db, 'v', default_edge_collection=col_name),
+        lambda: ArangoBatchTimeTravellingDB(
+            arango_db, 'reg', 'v', default_edge_collection=col_name),
         ValueError, 'edge is not an edge collection')
 
     check_exception(
-        lambda: ArangoBatchTimeTravellingDB(arango_db, 'v', edge_collections=[col_name]),
+        lambda: ArangoBatchTimeTravellingDB(arango_db, 'reg', 'v', edge_collections=[col_name]),
         ValueError, 'edge is not an edge collection')
 
 def test_init_fail_bad_merge_collection(arango_db):
     create_timetravel_collection(arango_db, 'v')
     create_timetravel_collection(arango_db, 'e', edge=True)
     create_timetravel_collection(arango_db, 'm')
+    arango_db.create_collection('reg')
 
     check_exception(
         lambda: ArangoBatchTimeTravellingDB(
-            arango_db, 'v', default_edge_collection='e', merge_collection='m'),
+            arango_db, 'reg', 'v', default_edge_collection='e', merge_collection='m'),
         ValueError, 'm is not an edge collection')
 
 IDX_SPEC_ID = ("{'type': 'persistent', 'fields': ['id', 'expired', 'created'], " +
@@ -120,40 +138,44 @@ def test_init_fail_no_id_index_vertex_collection(arango_db):
     col = arango_db.create_collection('v')
     col.add_persistent_index(['expired', 'created', 'last_version'])
     create_timetravel_collection(arango_db, 'e', edge=True)
+    arango_db.create_collection('reg')
 
     check_exception(
         lambda: ArangoBatchTimeTravellingDB(
-            arango_db, 'v', default_edge_collection='e'),
+            arango_db, 'reg', 'v', default_edge_collection='e'),
         ValueError, f'Collection v is missing required index with specification {IDX_SPEC_ID}')
 
 def test_init_fail_no_expire_index_vertex_collection(arango_db):
     col = arango_db.create_collection('v')
     col.add_persistent_index(['id', 'expired', 'created'])
     create_timetravel_collection(arango_db, 'e', edge=True)
+    arango_db.create_collection('reg')
 
     check_exception(
         lambda: ArangoBatchTimeTravellingDB(
-            arango_db, 'v', default_edge_collection='e'),
+            arango_db, 'reg', 'v', default_edge_collection='e'),
         ValueError, f'Collection v is missing required index with specification {IDX_SPEC_EXP}')
 
 def test_init_fail_no_id_index_edge_collection(arango_db):
     create_timetravel_collection(arango_db, 'v')
     col = arango_db.create_collection('e', edge=True)
     col.add_persistent_index(['expired', 'created', 'last_version'])
+    arango_db.create_collection('reg')
 
     check_exception(
         lambda: ArangoBatchTimeTravellingDB(
-            arango_db, 'v', default_edge_collection='e'),
+            arango_db, 'reg', 'v', default_edge_collection='e'),
         ValueError, f'Collection e is missing required index with specification {IDX_SPEC_ID}')
 
 def test_init_fail_no_expire_index_edge_collection(arango_db):
     create_timetravel_collection(arango_db, 'v')
     col = arango_db.create_collection('e', edge=True)
     col.add_persistent_index(['id', 'expired', 'created'])
+    arango_db.create_collection('reg')
 
     check_exception(
         lambda: ArangoBatchTimeTravellingDB(
-            arango_db, 'v', default_edge_collection='e'),
+            arango_db, 'reg', 'v', default_edge_collection='e'),
         ValueError, f'Collection e is missing required index with specification {IDX_SPEC_EXP}')
 
 def test_init_fail_no_id_index_merge_collection(arango_db):
@@ -161,10 +183,11 @@ def test_init_fail_no_id_index_merge_collection(arango_db):
     create_timetravel_collection(arango_db, 'e', edge=True)
     col = arango_db.create_collection('m', edge=True)
     col.add_persistent_index(['expired', 'created', 'last_version'])
+    arango_db.create_collection('reg')
 
     check_exception(
         lambda: ArangoBatchTimeTravellingDB(
-            arango_db, 'v', default_edge_collection='e', merge_collection='m'),
+            arango_db, 'reg', 'v', default_edge_collection='e', merge_collection='m'),
         ValueError, f'Collection m is missing required index with specification {IDX_SPEC_ID}')
 
 def test_init_fail_no_expire_index_merge_collection(arango_db):
@@ -172,10 +195,11 @@ def test_init_fail_no_expire_index_merge_collection(arango_db):
     create_timetravel_collection(arango_db, 'e', edge=True)
     col = arango_db.create_collection('m', edge=True)
     col.add_persistent_index(['id', 'expired', 'created'])
+    arango_db.create_collection('reg')
 
     check_exception(
         lambda: ArangoBatchTimeTravellingDB(
-            arango_db, 'v', default_edge_collection='e', merge_collection='m'),
+            arango_db, 'reg', 'v', default_edge_collection='e', merge_collection='m'),
         ValueError, f'Collection m is missing required index with specification {IDX_SPEC_EXP}')
 
 def test_fail_no_default_edge_collection(arango_db):
@@ -186,7 +210,9 @@ def test_fail_no_default_edge_collection(arango_db):
     create_timetravel_collection(arango_db, 'v')
     col_name = 'edge'
     create_timetravel_collection(arango_db, col_name, edge=True)
-    adbtt = ArangoBatchTimeTravellingDB(arango_db, 'v', edge_collections=[col_name])
+    arango_db.create_collection('reg')
+
+    adbtt = ArangoBatchTimeTravellingDB(arango_db, 'reg', 'v', edge_collections=[col_name])
 
     check_exception(lambda:  adbtt.get_edges(['id'], 3), ValueError,
         'No default edge collection specified, must specify edge collection')
@@ -203,20 +229,141 @@ def test_fail_no_such_edge_collection(arango_db):
     create_timetravel_collection(arango_db, 'e2', edge=True)
     create_timetravel_collection(arango_db, 'e3', edge=True)
     create_timetravel_collection(arango_db, 'm', edge=True)
+    arango_db.create_collection('reg')
 
     # without merge collection
-    adbtt = ArangoBatchTimeTravellingDB(arango_db, 'v', default_edge_collection='e1',
+    adbtt = ArangoBatchTimeTravellingDB(arango_db, 'reg', 'v', default_edge_collection='e1',
         edge_collections=['e2', 'e3', 'e2', 'e1'])
 
     check_exception(lambda:  adbtt.expire_edge('id', 3, 'e4'), ValueError,
         'Edge collection e4 was not registered at initialization')
 
     # with merge collection
-    adbtt = ArangoBatchTimeTravellingDB(arango_db, 'v', default_edge_collection='e1',
+    adbtt = ArangoBatchTimeTravellingDB(arango_db, 'reg', 'v', default_edge_collection='e1',
         edge_collections=['e2', 'e3', 'e2', 'e1'], merge_collection='m')
 
     check_exception(lambda:  adbtt.expire_edge('id', 3, 'e4'), ValueError,
         'Edge collection e4 was not registered at initialization')
+
+def test_register_load_start(arango_db):
+    """
+    Tests registering the start of a load with the db.
+    """
+    create_timetravel_collection(arango_db, 'v')
+    create_timetravel_collection(arango_db, 'e', edge=True)
+    arango_db.create_collection('reg')
+
+    att = ArangoBatchTimeTravellingDB(arango_db, 'reg', 'v', edge_collections=['e'])
+
+    att.register_load_start('GeneOntology', '09-08-07', 1000, 500)
+
+    expected = [{
+        '_key': 'GeneOntology_09-08-07',
+        '_id': 'reg/GeneOntology_09-08-07',
+        'load_namespace': 'GeneOntology',
+        'load_version': '09-08-07',
+        'load_timestamp': 1000,
+        'start_time': 500,
+        'completion_time': None,
+        'state': 'in_progress',
+        'vertex_collection': 'v',
+        'merge_collection': None, 
+        'edge_collections': ['e']
+    }]
+
+    check_docs(arango_db, expected, 'reg')
+
+def test_register_load_start_with_merge_col_and_multiple_edge_cols(arango_db):
+    """
+    Tests registering the start of a load with the db with more collections.
+    """
+    create_timetravel_collection(arango_db, 'v')
+    create_timetravel_collection(arango_db, 'm', edge=True)
+    create_timetravel_collection(arango_db, 'e1', edge=True)
+    create_timetravel_collection(arango_db, 'e2', edge=True)
+    create_timetravel_collection(arango_db, 'e3', edge=True)
+    arango_db.create_collection('reg')
+
+    att = ArangoBatchTimeTravellingDB(
+        arango_db, 'reg', 'v', merge_collection='m', default_edge_collection='e2',
+        edge_collections=['e1', 'e3'])
+
+    att.register_load_start('GeneOntology', '09-08-07', 1000, 500)
+
+    expected = [{
+        '_key': 'GeneOntology_09-08-07',
+        '_id': 'reg/GeneOntology_09-08-07',
+        'load_namespace': 'GeneOntology',
+        'load_version': '09-08-07',
+        'load_timestamp': 1000,
+        'start_time': 500,
+        'completion_time': None,
+        'state': 'in_progress',
+        'vertex_collection': 'v',
+        'merge_collection': 'm', 
+        'edge_collections': ['e1', 'e2', 'e3']
+    }]
+
+    check_docs(arango_db, expected, 'reg')
+
+def test_register_load_start_fail_doc_exists(arango_db):
+    """
+    Test the case where a load is already in progress or already loaded and so this load should
+    fail.
+    """
+    create_timetravel_collection(arango_db, 'v')
+    create_timetravel_collection(arango_db, 'e', edge=True)
+    arango_db.create_collection('reg')
+
+    att = ArangoBatchTimeTravellingDB(arango_db, 'reg', 'v', edge_collections=['e'])
+
+    att.register_load_start('GeneOntology', '09-08-07', 1000, 500)
+    
+    check_exception(lambda: att.register_load_start('GeneOntology', '09-08-07', 8000, 400),
+        ValueError, 'Load is already registered')
+
+
+def test_register_load_complete(arango_db):
+    """
+    Tests registering the completion of a load with the db.
+    """
+    create_timetravel_collection(arango_db, 'v')
+    create_timetravel_collection(arango_db, 'e', edge=True)
+    arango_db.create_collection('reg')
+
+    att = ArangoBatchTimeTravellingDB(arango_db, 'reg', 'v', edge_collections=['e'])
+
+    att.register_load_start('GeneOntology', '09-08-07', 1000, 500)
+    att.register_load_complete('GeneOntology', '09-08-07', 800)
+
+    expected = [{
+        '_key': 'GeneOntology_09-08-07',
+        '_id': 'reg/GeneOntology_09-08-07',
+        'load_namespace': 'GeneOntology',
+        'load_version': '09-08-07',
+        'load_timestamp': 1000,
+        'start_time': 500,
+        'completion_time': 800,
+        'state': 'complete',
+        'vertex_collection': 'v',
+        'merge_collection': None, 
+        'edge_collections': ['e']
+    }]
+
+    check_docs(arango_db, expected, 'reg')
+
+def test_register_load_complete_fail_not_started(arango_db):
+    """
+    Test the case where a load is not registered and so cannot be completed.
+    """
+    create_timetravel_collection(arango_db, 'v')
+    create_timetravel_collection(arango_db, 'e', edge=True)
+    arango_db.create_collection('reg')
+
+    att = ArangoBatchTimeTravellingDB(arango_db, 'reg', 'v', edge_collections=['e'])
+
+    check_exception(lambda: att.register_load_complete('GeneOntology', '09-08-07', 800),
+        ValueError, 'Load is not registered, cannot be completed')
 
 def test_get_vertices(arango_db):
     """
@@ -225,6 +372,7 @@ def test_get_vertices(arango_db):
     col_name = 'verts'
     col = create_timetravel_collection(arango_db, col_name)
     create_timetravel_collection(arango_db, 'e', edge=True)
+    arango_db.create_collection('reg')
 
     # it's assumed that given an id and a timestamp there's <= 1 match in the collection
     col.import_bulk([{'_key': '1', 'id': 'foo', 'created': 100, 'expired': 600},
@@ -233,7 +381,7 @@ def test_get_vertices(arango_db):
                      {'_key': '4', 'id': 'bar', 'created': 301, 'expired': 400},
                      ])
 
-    att = ArangoBatchTimeTravellingDB(arango_db, col_name, edge_collections=['e'])
+    att = ArangoBatchTimeTravellingDB(arango_db, 'reg', col_name, edge_collections=['e'])
 
     ret = att.get_vertices(['bar'], 201)
     assert ret == {
@@ -268,6 +416,7 @@ def test_get_edges(arango_db):
     create_timetravel_collection(arango_db, 'v')
     col_name = 'edges'
     col = create_timetravel_collection(arango_db, col_name, edge=True)
+    arango_db.create_collection('reg')
 
     # it's assumed that given an id and a timestamp there's <= 1 match in the collection
     col.import_bulk([{'_key': '1', '_from': 'fake/1', '_to': 'fake/2', 'id': 'foo',
@@ -280,7 +429,7 @@ def test_get_edges(arango_db):
                       'created': 301, 'expired': 400},
                      ])
 
-    att = ArangoBatchTimeTravellingDB(arango_db, 'v', default_edge_collection=col_name)
+    att = ArangoBatchTimeTravellingDB(arango_db, 'reg', 'v', default_edge_collection=col_name)
 
     ret = att.get_edges(['bar'], 201)
     assert ret == {'bar': {'_key': '3', '_id': 'edges/3', '_from': 'fake/1', '_to': 'fake/2',
@@ -318,7 +467,9 @@ def test_save_vertex(arango_db):
     col_name = 'verts'
     create_timetravel_collection(arango_db, col_name)
     create_timetravel_collection(arango_db, 'e', edge=True)
-    att = ArangoBatchTimeTravellingDB(arango_db, col_name, default_edge_collection='e')
+    arango_db.create_collection('reg')
+
+    att = ArangoBatchTimeTravellingDB(arango_db, 'reg', col_name, default_edge_collection='e')
 
     k = att.save_vertex('myid', 'load-ver1', 500, {'science': 'yes!'})
     assert k == 'myid_load-ver1'
@@ -352,7 +503,9 @@ def test_save_edge(arango_db):
     create_timetravel_collection(arango_db, 'v')
     col_name = 'edges'
     create_timetravel_collection(arango_db, col_name, edge=True)
-    att = ArangoBatchTimeTravellingDB(arango_db, 'v', edge_collections=[col_name])
+    arango_db.create_collection('reg')
+
+    att = ArangoBatchTimeTravellingDB(arango_db, 'reg', 'v', edge_collections=[col_name])
 
     k = att.save_edge(
         'myid',
@@ -410,7 +563,10 @@ def test_save_merge_edge(arango_db):
     create_timetravel_collection(arango_db, 'v')
     create_timetravel_collection(arango_db, 'e', edge=True)
     create_timetravel_collection(arango_db, 'm', edge=True)
-    att = ArangoBatchTimeTravellingDB(arango_db, 'v', edge_collections=['e'], merge_collection='m')
+    arango_db.create_collection('reg')
+
+    att = ArangoBatchTimeTravellingDB(
+        arango_db, 'reg', 'v', edge_collections=['e'], merge_collection='m')
 
     k = att.save_edge(
         'myid',
@@ -444,7 +600,9 @@ def test_set_last_version_on_vertex(arango_db):
     col_name = 'verts'
     create_timetravel_collection(arango_db, col_name)
     create_timetravel_collection(arango_db, 'e', edge=True)
-    att = ArangoBatchTimeTravellingDB(arango_db, col_name, edge_collections=['e'])
+    arango_db.create_collection('reg')
+
+    att = ArangoBatchTimeTravellingDB(arango_db, 'reg', col_name, edge_collections=['e'])
 
     key = att.save_vertex('myid', 'load-ver1', 500, {'science': 'yes!'})
     _ = att.save_vertex('myid1', 'load-ver1', 500, {'science': 'yes!'})
@@ -479,7 +637,9 @@ def test_set_last_version_on_edge(arango_db):
     create_timetravel_collection(arango_db, 'v')
     col_name = 'edges'
     create_timetravel_collection(arango_db, col_name, edge=True)
-    att = ArangoBatchTimeTravellingDB(arango_db, 'v', default_edge_collection=col_name)
+    arango_db.create_collection('reg')
+
+    att = ArangoBatchTimeTravellingDB(arango_db, 'reg', 'v', default_edge_collection=col_name)
 
     key = att.save_edge(
         'myid',
@@ -533,6 +693,7 @@ def _setup_expire_vertex(arango_db):
     fake_col = create_timetravel_collection(arango_db, 'fake')
     edge1_col = create_timetravel_collection(arango_db, edge1_col_name, edge=True)
     edge2_col = create_timetravel_collection(arango_db, edge2_col_name, edge=True)
+    arango_db.create_collection('reg')
 
     vert_col.import_bulk([
         {'_key': '1', '_id': 'verts/1', 'id': 'foo', 'created': 100, 'expired': 9000},
@@ -580,7 +741,8 @@ def test_expire_vertex_single_vertex(arango_db):
     """
 
     edges1, edges2 = _setup_expire_vertex(arango_db)
-    att = ArangoBatchTimeTravellingDB(arango_db, 'verts', edge_collections=['edges1', 'edges2'])
+    att = ArangoBatchTimeTravellingDB(
+        arango_db, 'reg', 'verts', edge_collections=['edges1', 'edges2'])
 
     att.expire_vertex('1', 500)
 
@@ -605,8 +767,10 @@ def test_expire_edge(arango_db):
     col_name = 'edges'
     create_timetravel_collection(arango_db, col_name, edge=True)
     create_timetravel_collection(arango_db, 'm', edge=True)
+    arango_db.create_collection('reg')
+
     att = ArangoBatchTimeTravellingDB(
-        arango_db, 'v', default_edge_collection=col_name, merge_collection='m')
+        arango_db, 'reg', 'v', default_edge_collection=col_name, merge_collection='m')
 
     key = att.save_edge(
         'myid',
@@ -658,6 +822,7 @@ def test_expire_extant_vertices_without_last_version(arango_db):
     col_name = 'verts'
     col = create_timetravel_collection(arango_db, col_name)
     create_timetravel_collection(arango_db, 'e', edge=True)
+    arango_db.create_collection('reg')
 
     test_data = [
         {'_key': '0', 'id': 'baz', 'created': 100, 'expired': 300, 'last_version': '2'},
@@ -668,7 +833,7 @@ def test_expire_extant_vertices_without_last_version(arango_db):
         ]
     col.import_bulk(test_data)
 
-    att = ArangoBatchTimeTravellingDB(arango_db, col_name, default_edge_collection='e')
+    att = ArangoBatchTimeTravellingDB(arango_db, 'reg', col_name,    default_edge_collection='e')
 
     # test 1
     att.expire_extant_vertices_without_last_version(100, "2")
@@ -719,6 +884,7 @@ def test_expire_extant_edges_without_last_version(arango_db):
     col_name = 'edges'
     col = create_timetravel_collection(arango_db, col_name, edge=True)
     create_timetravel_collection(arango_db, 'm', edge=True)
+    arango_db.create_collection('reg')
 
     test_data = [
         {'_key': '0', 'id': 'baz', 'created': 100, 'expired': 300, 'last_version': '2',
@@ -735,7 +901,7 @@ def test_expire_extant_edges_without_last_version(arango_db):
     col.import_bulk(test_data)
 
     att = ArangoBatchTimeTravellingDB(
-        arango_db, 'v', edge_collections=[col_name], merge_collection='m')
+        arango_db, 'reg', 'v', edge_collections=[col_name], merge_collection='m')
 
     # test 1
     att.expire_extant_edges_without_last_version(100, '2', edge_collection=col_name)
@@ -788,7 +954,9 @@ def test_batch_noop_vertex(arango_db):
     """
     col = create_timetravel_collection(arango_db, 'v')
     create_timetravel_collection(arango_db, 'e', edge=True)
-    att = ArangoBatchTimeTravellingDB(arango_db, 'v', default_edge_collection='e')
+    arango_db.create_collection('reg')
+
+    att = ArangoBatchTimeTravellingDB(arango_db, 'reg', 'v', default_edge_collection='e')
     b = att.get_batch_updater()
     assert b.get_collection() == 'v'
     assert b.is_edge is False
@@ -810,8 +978,10 @@ def test_batch_noop_edge(arango_db):
     create_timetravel_collection(arango_db, 'v')
     col = create_timetravel_collection(arango_db, 'e', edge=True)
     create_timetravel_collection(arango_db, 'm', edge=True)
+    arango_db.create_collection('reg')
+
     att = ArangoBatchTimeTravellingDB(
-        arango_db, 'v', default_edge_collection='e', merge_collection='m')
+        arango_db, 'reg', 'v', default_edge_collection='e', merge_collection='m')
     b = att.get_batch_updater(edge_collection_name='e')
     assert b.get_collection() == 'e'
     assert b.is_edge is True
@@ -831,8 +1001,10 @@ def test_batch_noop_merge(arango_db):
     create_timetravel_collection(arango_db, 'v')
     create_timetravel_collection(arango_db, 'e', edge=True)
     col = create_timetravel_collection(arango_db, 'm', edge=True)
+    arango_db.create_collection('reg')
+
     att = ArangoBatchTimeTravellingDB(
-        arango_db, 'v', default_edge_collection='e', merge_collection='m')
+        arango_db, 'reg', 'v', default_edge_collection='e', merge_collection='m')
     b = att.get_batch_updater(edge_collection_name='m')
     assert b.get_collection() == 'm'
     assert b.is_edge is True
@@ -849,7 +1021,9 @@ def test_batch_fail_get_batch_updater(arango_db):
     """
     create_timetravel_collection(arango_db, 'v')
     create_timetravel_collection(arango_db, 'e', edge=True)
-    att = ArangoBatchTimeTravellingDB(arango_db, 'v', default_edge_collection='e')
+    arango_db.create_collection('reg')
+
+    att = ArangoBatchTimeTravellingDB(arango_db, 'reg', 'v', default_edge_collection='e')
     
     check_exception(lambda: att.get_batch_updater('v'), ValueError,
         'Edge collection v was not registered at initialization')
@@ -860,7 +1034,9 @@ def test_batch_create_vertices(arango_db):
     """
     col = create_timetravel_collection(arango_db, 'v')
     create_timetravel_collection(arango_db, 'e', edge=True)
-    att = ArangoBatchTimeTravellingDB(arango_db, 'v', default_edge_collection='e')
+    arango_db.create_collection('reg')
+    
+    att = ArangoBatchTimeTravellingDB(arango_db, 'reg', 'v', default_edge_collection='e')
     
     b = att.get_batch_updater()
 
@@ -902,7 +1078,9 @@ def test_batch_create_vertex_fail_not_vertex_collection(arango_db):
     """
     create_timetravel_collection(arango_db, 'v')
     create_timetravel_collection(arango_db, 'e', edge=True)
-    att = ArangoBatchTimeTravellingDB(arango_db, 'v', default_edge_collection='e')
+    arango_db.create_collection('reg')
+
+    att = ArangoBatchTimeTravellingDB(arango_db, 'reg', 'v', default_edge_collection='e')
 
     b = att.get_batch_updater('e')
 
@@ -915,7 +1093,9 @@ def test_batch_create_edges(arango_db):
     """
     create_timetravel_collection(arango_db, 'v')
     col = create_timetravel_collection(arango_db, 'e', edge=True)
-    att = ArangoBatchTimeTravellingDB(arango_db, 'v', default_edge_collection='e')
+    arango_db.create_collection('reg')
+
+    att = ArangoBatchTimeTravellingDB(arango_db, 'reg', 'v', default_edge_collection='e')
     
     b = att.get_batch_updater('e')
 
@@ -980,8 +1160,10 @@ def test_batch_create_mergeedge(arango_db):
     create_timetravel_collection(arango_db, 'v')
     create_timetravel_collection(arango_db, 'e', edge=True)
     col = create_timetravel_collection(arango_db, 'm', edge=True)
+    arango_db.create_collection('reg')
+
     att = ArangoBatchTimeTravellingDB(
-        arango_db, 'v', default_edge_collection='e', merge_collection='m')
+        arango_db, 'reg', 'v', default_edge_collection='e', merge_collection='m')
     
     b = att.get_batch_updater('m')
 
@@ -1022,7 +1204,9 @@ def test_batch_create_edge_fail_not_edge_collection(arango_db):
     """
     create_timetravel_collection(arango_db, 'v')
     create_timetravel_collection(arango_db, 'e', edge=True)
-    att = ArangoBatchTimeTravellingDB(arango_db, 'v', default_edge_collection='e')
+    arango_db.create_collection('reg')
+
+    att = ArangoBatchTimeTravellingDB(arango_db, 'reg', 'v', default_edge_collection='e')
 
     b = att.get_batch_updater()
 
@@ -1035,6 +1219,7 @@ def test_batch_set_last_version_on_vertex(arango_db):
     """
     col = create_timetravel_collection(arango_db, 'v')
     create_timetravel_collection(arango_db, 'e', edge=True)
+    arango_db.create_collection('reg')
 
     expected = [{'_id': 'v/1', '_key': '1', 'id': 'foo', 'last_version': '1'},
                 {'_id': 'v/2', '_key': '2', 'id': 'bar', 'last_version': '1'},
@@ -1043,7 +1228,7 @@ def test_batch_set_last_version_on_vertex(arango_db):
 
     col.import_bulk(expected)
 
-    att = ArangoBatchTimeTravellingDB(arango_db, 'v', default_edge_collection='e')
+    att = ArangoBatchTimeTravellingDB(arango_db, 'reg', 'v', default_edge_collection='e')
     b = att.get_batch_updater()
 
     b.set_last_version_on_vertex('1', '2')
@@ -1069,7 +1254,9 @@ def test_batch_set_last_version_on_vertex_fail_not_vertex_collection(arango_db):
     """
     create_timetravel_collection(arango_db, 'v')
     create_timetravel_collection(arango_db, 'e', edge=True)
-    att = ArangoBatchTimeTravellingDB(arango_db, 'v', default_edge_collection='e')
+    arango_db.create_collection('reg')
+
+    att = ArangoBatchTimeTravellingDB(arango_db, 'reg', 'v', default_edge_collection='e')
 
     b = att.get_batch_updater('e')
 
@@ -1082,6 +1269,7 @@ def test_batch_set_last_version_on_edge(arango_db):
     """
     create_timetravel_collection(arango_db, 'v')
     col = create_timetravel_collection(arango_db, 'e', edge=True)
+    arango_db.create_collection('reg')
 
     expected = [{'_id': 'e/1', '_key': '1', '_from': 'v/2', '_to': 'v/1', 'id': 'foo',
                  'last_version': '1'},
@@ -1093,7 +1281,7 @@ def test_batch_set_last_version_on_edge(arango_db):
 
     col.import_bulk(expected)
 
-    att = ArangoBatchTimeTravellingDB(arango_db, 'v', default_edge_collection='e')
+    att = ArangoBatchTimeTravellingDB(arango_db, 'reg', 'v', default_edge_collection='e')
     b = att.get_batch_updater('e')
 
     # these 'edges' are cheating - normally they'd be pulled from the db and have many
@@ -1123,7 +1311,9 @@ def test_batch_set_last_version_on_edge_fail_not_edge_collection(arango_db):
     """
     create_timetravel_collection(arango_db, 'v')
     create_timetravel_collection(arango_db, 'e', edge=True)
-    att = ArangoBatchTimeTravellingDB(arango_db, 'v', default_edge_collection='e')
+    arango_db.create_collection('reg')
+
+    att = ArangoBatchTimeTravellingDB(arango_db, 'reg', 'v', default_edge_collection='e')
 
     b = att.get_batch_updater()
 
@@ -1136,6 +1326,7 @@ def test_batch_expire_vertex(arango_db):
     """
     col = create_timetravel_collection(arango_db, 'v')
     create_timetravel_collection(arango_db, 'e', edge=True)
+    arango_db.create_collection('reg')
 
     expected = [{'_id': 'v/1', '_key': '1', 'id': 'foo', 'expired': 1000},
                 {'_id': 'v/2', '_key': '2', 'id': 'bar', 'expired': 1000},
@@ -1144,7 +1335,7 @@ def test_batch_expire_vertex(arango_db):
 
     col.import_bulk(expected)
 
-    att = ArangoBatchTimeTravellingDB(arango_db, 'v', default_edge_collection='e')
+    att = ArangoBatchTimeTravellingDB(arango_db, 'reg', 'v', default_edge_collection='e')
     b = att.get_batch_updater()
 
     b.expire_vertex('1', 500)
@@ -1169,7 +1360,9 @@ def test_batch_expire_vertex_fail_not_vertex_collection(arango_db):
     """
     create_timetravel_collection(arango_db, 'v')
     create_timetravel_collection(arango_db, 'e', edge=True)
-    att = ArangoBatchTimeTravellingDB(arango_db, 'v', default_edge_collection='e')
+    arango_db.create_collection('reg')
+
+    att = ArangoBatchTimeTravellingDB(arango_db, 'reg', 'v', default_edge_collection='e')
 
     b = att.get_batch_updater('e')
 
@@ -1182,6 +1375,7 @@ def test_batch_expire_edge(arango_db):
     """
     create_timetravel_collection(arango_db, 'v')
     col = create_timetravel_collection(arango_db, 'e', edge=True)
+    arango_db.create_collection('reg')
 
     expected = [{'_id': 'e/1', '_key': '1', '_from': 'v/2', '_to': 'v/1', 'id': 'foo',
                  'expired': 1000},
@@ -1193,7 +1387,7 @@ def test_batch_expire_edge(arango_db):
 
     col.import_bulk(expected)
 
-    att = ArangoBatchTimeTravellingDB(arango_db, 'v', default_edge_collection='e')
+    att = ArangoBatchTimeTravellingDB(arango_db, 'reg', 'v', default_edge_collection='e')
     b = att.get_batch_updater('e')
 
     # these 'edges' are cheating - normally they'd be pulled from the db and have many
@@ -1223,7 +1417,9 @@ def test_batch_expire_edge_fail_not_edge_collection(arango_db):
     """
     create_timetravel_collection(arango_db, 'v')
     create_timetravel_collection(arango_db, 'e', edge=True)
-    att = ArangoBatchTimeTravellingDB(arango_db, 'v', default_edge_collection='e')
+    arango_db.create_collection('reg')
+
+    att = ArangoBatchTimeTravellingDB(arango_db, 'reg', 'v', default_edge_collection='e')
 
     b = att.get_batch_updater()
 

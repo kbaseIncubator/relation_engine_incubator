@@ -41,8 +41,9 @@ def test_merge_setup_fail(arango_db):
     """
     create_timetravel_collection(arango_db, 'v')
     create_timetravel_collection(arango_db, 'e', edge=True)
+    arango_db.create_collection('r')
 
-    att = ArangoBatchTimeTravellingDB(arango_db, 'v', default_edge_collection='e')
+    att = ArangoBatchTimeTravellingDB(arango_db, 'r', 'v', default_edge_collection='e')
 
     # sources are fake, but real not necessary to trigger error
     check_exception(lambda: load_graph_delta([], [], att, 1, "2", merge_source=[{}]),
@@ -63,6 +64,7 @@ def _load_no_merge_source(arango_db, batchsize):
     def_ecol = create_timetravel_collection(arango_db, 'def_e', edge=True)
     e1col = create_timetravel_collection(arango_db, 'e1', edge=True)
     e2col = create_timetravel_collection(arango_db, 'e2', edge=True)
+    arango_db.create_collection('r')
 
     _import_bulk(
         vcol,
@@ -137,7 +139,7 @@ def _load_no_merge_source(arango_db, batchsize):
         {'_collection': 'def_e', 'id': 'gap', 'from': 'gap', 'to': 'same1', 'data': 'bar'}
     ]
 
-    db = ArangoBatchTimeTravellingDB(arango_db, 'v', default_edge_collection='def_e',
+    db = ArangoBatchTimeTravellingDB(arango_db, 'r', 'v', default_edge_collection='def_e',
             edge_collections=['e1', 'e2'])
     
     if batchsize:
@@ -251,6 +253,7 @@ def test_merge_edges(arango_db):
     vcol = create_timetravel_collection(arango_db, 'v')
     ecol = create_timetravel_collection(arango_db, 'e', edge=True)
     create_timetravel_collection(arango_db, 'm', edge=True)
+    arango_db.create_collection('r')
     
     _import_bulk(
         vcol,
@@ -284,7 +287,7 @@ def test_merge_edges(arango_db):
         {'id': 't_to_f', 'from': 'target', 'to': 'fake2', 'data': 'whoa'}   # will be ignored
     ]
 
-    db = ArangoBatchTimeTravellingDB(arango_db, 'v', default_edge_collection='e',
+    db = ArangoBatchTimeTravellingDB(arango_db, 'r', 'v', default_edge_collection='e',
             merge_collection='m')
     
     load_graph_delta(vsource, esource, db, 500, 'v2', merge_source=msource)
