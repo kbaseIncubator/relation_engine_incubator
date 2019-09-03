@@ -9,7 +9,6 @@ import unicodedata
 from collections import defaultdict
 from relation_engine.batchload.load_utils import canonicalize
 
-_CANONICAL_IGNORE_SET = {'et','al','and','or','the','a'}
 _SEP = r'\s\|\s?'
 _SCI_NAME = 'scientific name'
 
@@ -50,10 +49,7 @@ class NCBINodeProvider:
             for cat in list(self._names[id_].keys()):
                 if cat != _SCI_NAME:
                     for nam in self._names[id_][cat]:
-                        aliases.append({'category':  cat, 
-                                        'name':      nam, 
-                                        'canonical': canonicalize(nam, _CANONICAL_IGNORE_SET)
-                                        })
+                        aliases.append({'category':  cat,'name': nam})
 
             # vertex
             sci_names = self._names[id_][_SCI_NAME]
@@ -62,8 +58,6 @@ class NCBINodeProvider:
             node = {
                     'id':                         id_,
                     'scientific_name':            sci_names[0],
-                    'canonical_scientific_name':  canonicalize(
-                        sci_names[0], _CANONICAL_IGNORE_SET),
                     'rank':                       rank,
                     'aliases':                    aliases,
                     'ncbi_taxon_id':              int(id_),
