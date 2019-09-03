@@ -14,6 +14,7 @@ from relation_engine.batchload.delta_load import load_graph_delta
 from relation_engine.batchload.test.test_helpers import create_timetravel_collection
 from relation_engine.batchload.test.test_helpers import check_docs, check_exception
 from arango import ArangoClient
+import datetime
 from pytest import fixture
 
 HOST = 'localhost'
@@ -46,7 +47,7 @@ def test_merge_setup_fail(arango_db):
     att = ArangoBatchTimeTravellingDB(arango_db, 'r', 'v', default_edge_collection='e')
 
     # sources are fake, but real not necessary to trigger error
-    check_exception(lambda: load_graph_delta([], [], att, 1, "2", merge_source=[{}]),
+    check_exception(lambda: load_graph_delta('ns', [], [], att, 1, "2", merge_source=[{}]),
         ValueError, 'A merge source is specified but the database has no merge collection')
 
 def test_load_no_merge_source_batch_2(arango_db):
@@ -143,9 +144,9 @@ def _load_no_merge_source(arango_db, batchsize):
             edge_collections=['e1', 'e2'])
     
     if batchsize:
-        load_graph_delta(vsource, esource, db, 500, 'v2', batch_size=batchsize)
+        load_graph_delta('ns', vsource, esource, db, 500, 'v2', batch_size=batchsize)
     else: 
-        load_graph_delta(vsource, esource, db, 500, 'v2')
+        load_graph_delta('ns', vsource, esource, db, 500, 'v2')
 
     vexpected = [
         {'id': 'expire', '_key': 'expire_v0', '_id': 'v/expire_v0',
@@ -245,6 +246,23 @@ def _load_no_merge_source(arango_db, batchsize):
 
     check_docs(arango_db, e2_expected, 'e2')
 
+    registry_expected = {
+        '_key': 'ns_v2',
+        '_id': 'r/ns_v2',
+        'load_namespace': 'ns',
+        'load_version': 'v2',
+        'load_timestamp': 500,
+        # 'start_time': 0,
+        # 'completion_time': 0,
+        'state': 'complete',
+        'vertex_collection': 'v',
+        'merge_collection': None, 
+        'edge_collections': ['def_e', 'e1', 'e2']
+    }
+
+    _check_registry_doc(arango_db, registry_expected, 'r')
+
+
 def test_merge_edges(arango_db):
     """
     Test that merge edges are handled appropriately.
@@ -290,7 +308,7 @@ def test_merge_edges(arango_db):
     db = ArangoBatchTimeTravellingDB(arango_db, 'r', 'v', default_edge_collection='e',
             merge_collection='m')
     
-    load_graph_delta(vsource, esource, db, 500, 'v2', merge_source=msource)
+    load_graph_delta('mns', vsource, esource, db, 500, 'v2', merge_source=msource)
 
     vexpected = [
         {'id': 'root', '_key': 'root_v1', '_id': 'v/root_v1',
@@ -328,6 +346,22 @@ def test_merge_edges(arango_db):
 
     check_docs(arango_db, m_expected, 'm')
 
+    registry_expected = {
+        '_key': 'mns_v2',
+        '_id': 'r/mns_v2',
+        'load_namespace': 'mns',
+        'load_version': 'v2',
+        'load_timestamp': 500,
+        # 'start_time': 0,
+        # 'completion_time': 0,
+        'state': 'complete',
+        'vertex_collection': 'v',
+        'merge_collection': 'm', 
+        'edge_collections': ['e']
+    }
+
+    _check_registry_doc(arango_db, registry_expected, 'r')
+
 # modifies docs in place!
 # vert_col_name != None implies an edge
 def _import_bulk(
@@ -349,3 +383,22 @@ def _import_bulk(
         d['first_version'] = first_version
         d['last_version'] = last_version
     col.import_bulk(docs)
+
+def _check_registry_doc(arango_db, expected, collection):
+    col = arango_db.collection(collection)
+    assert col.count() == 1, 'Incorrect # of docs in registry collection ' + collection
+    doc = col.get(expected['_key'])
+    del doc['_rev']
+    start = doc['start_time']
+    del doc['start_time']
+    end = doc['completion_time']
+    del doc['completion_time']
+    
+    assert expected == doc
+    _assert_close_to_now_in_epoch_ms(start)
+    _assert_close_to_now_in_epoch_ms(end)
+
+def _assert_close_to_now_in_epoch_ms(time):
+    now = int(datetime.datetime.now(tz=datetime.timezone.utc).timestamp() * 1000)
+    assert now - 2000 < time
+    assert now + 2000 > time

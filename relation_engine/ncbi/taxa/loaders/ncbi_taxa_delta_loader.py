@@ -15,6 +15,7 @@ from relation_engine.ncbi.taxa.parsers import NCBIMergeProvider
 from relation_engine.batchload.delta_load import load_graph_delta
 from relation_engine.batchload.time_travelling_database import ArangoBatchTimeTravellingDB
 
+_LOAD_NAMESPACE = 'ncbi_taxa'
 
 NAMES_IN_FILE = 'names.dmp'
 NODES_IN_FILE = 'nodes.dmp'
@@ -106,8 +107,8 @@ def main():
         edgeprov = NCBIEdgeProvider(in2)
         merge = NCBIMergeProvider(merge)
 
-        load_graph_delta(nodeprov, edgeprov, attdb, a.load_timestamp, a.load_version,
-            merge_source=merge)
+        load_graph_delta(_LOAD_NAMESPACE, nodeprov, edgeprov, attdb,
+            a.load_timestamp, a.load_version, merge_source=merge)
 
 if __name__  == '__main__':
     main()

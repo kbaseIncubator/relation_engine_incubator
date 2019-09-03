@@ -6,7 +6,7 @@ So far this has only been run with GO Basic.
 
 # TODO TEST
 # TODO DOCS better documentation.
-# TODO NOW reload GO and see if anything changes
+# TODO NOW when checking if ID in namespace, split on : and check == id[0] vs .startswith()
 
 import json as _json
 from urllib.parse import urlparse

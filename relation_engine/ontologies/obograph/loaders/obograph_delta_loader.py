@@ -43,6 +43,11 @@ the changes between the prior load and the current load, and retaining the prior
         help='the path to a file containing the ArangoDB password and nothing else; ' +
             'if --user is included and --pwd-file is omitted a password prompt will be presented.')
     parser.add_argument(
+        '--load-namespace',
+        required=True,
+        help='the name of the data that is being loaded, e.g. envo, gene_ontology, etc. ' +
+            'Must be unique across all load sources and consistent across loads.')
+    parser.add_argument(
         '--load-registry-collection',
         required=True,
         help='the name of the ArangoDB collection where the load will be registered. ' +
@@ -106,9 +111,11 @@ def main():
     loader = OBOGraphLoader(obograph, a.onto_id_prefix, graph_id=a.graph_id)
 
     load_graph_delta(
+        a.load_namespace,
         loader.get_node_provider(),
         loader.get_edge_provider(),
-        attdb, a.load_timestamp,
+        attdb,
+        a.load_timestamp,
         a.load_version,
         merge_source=loader.get_merge_provider())
 
