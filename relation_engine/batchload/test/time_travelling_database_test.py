@@ -942,6 +942,195 @@ def test_expire_extant_edges_without_last_version(arango_db):
 
     check_docs(arango_db, expected, col_name)
 
+##############################################
+# Load reversion function tests
+##############################################
+
+REVERT_TEST_DATA = [
+    {'_key': '0', 'id': 'baz', 'created': 100, 'expired': 300, 'last_version': '2'},
+    {'_key': '1', 'id': 'foo', 'created': 100, 'expired': 600, 'last_version': '1'},
+    {'_key': '2', 'id': 'bar', 'created': 100, 'expired': 200, 'last_version': '1'},
+    {'_key': '3', 'id': 'bar', 'created': 201, 'expired': 300, 'last_version': '2'},
+    {'_key': '4', 'id': 'bar', 'created': 301, 'expired': 400, 'last_version': '2'},
+    ]
+
+def _prep_data_for_revert_tests(colname, edge=False):
+    actual_td = []
+    actual_expected = []
+    for e in REVERT_TEST_DATA:
+        e = dict(e)
+        e['_id'] = colname + '/' + e['_key']
+        actual_expected.append(e)
+    if edge: 
+        for td in REVERT_TEST_DATA:
+            td = dict(td)
+            td['_from'] = 'garbage/2'
+            td['_to'] = 'garbage/1'
+            actual_td.append(td)
+        for e in actual_expected:
+            e['_from'] = 'garbage/2'
+            e['_to'] = 'garbage/1'
+    else:
+        actual_td = REVERT_TEST_DATA
+
+    return actual_td, actual_expected
+
+def test_delete_created_documents_noop(arango_db):
+    """
+    Test that deleting documents at a specific creation time is a noop when there are no matching
+    documents.
+    """
+    vertcol = create_timetravel_collection(arango_db, 'v')
+    mergecol = create_timetravel_collection(arango_db, 'm', edge=True)
+    edgecol = create_timetravel_collection(arango_db, 'e', edge=True)
+    arango_db.create_collection('reg')
+    
+    att = ArangoBatchTimeTravellingDB(
+        arango_db, 'reg', 'v', merge_collection='m', edge_collections=['e'])
+
+    for col, edge in [(vertcol, False), (mergecol, True), (edgecol, True)]:
+        actual_td, actual_expected = _prep_data_for_revert_tests(col.name, edge)
+        col.import_bulk(actual_td)
+        att.delete_created_documents(col.name, 101)
+    
+        check_docs(arango_db, actual_expected, col.name)
+
+def test_delete_created_documents(arango_db):
+    """
+    Test deleting documents at a specific creation time.
+    """
+    vertcol = create_timetravel_collection(arango_db, 'v')
+    mergecol = create_timetravel_collection(arango_db, 'm', edge=True)
+    edgecol = create_timetravel_collection(arango_db, 'e', edge=True)
+    arango_db.create_collection('reg')
+    
+    att = ArangoBatchTimeTravellingDB(
+        arango_db, 'reg', 'v', merge_collection='m', edge_collections=['e'])
+
+    for col, edge in [(vertcol, False), (mergecol, True), (edgecol, True)]:
+        actual_td, actual_expected = _prep_data_for_revert_tests(col.name, edge)
+        col.import_bulk(actual_td)
+        att.delete_created_documents(col.name, 100)
+        actual_expected = actual_expected[3:]
+    
+        check_docs(arango_db, actual_expected, col.name)
+
+def test_delete_created_documents_fail_no_collection(arango_db):
+    """
+    Tests attempting to delete created documents on a non-existant collection.
+    """
+    create_timetravel_collection(arango_db, 'v')
+    create_timetravel_collection(arango_db, 'm', edge=True)
+    create_timetravel_collection(arango_db, 'e', edge=True)
+    arango_db.create_collection('reg')
+    
+    att = ArangoBatchTimeTravellingDB(
+        arango_db, 'reg', 'v', merge_collection='m', edge_collections=['e'])
+
+    check_exception(lambda: att.delete_created_documents('z', 100),
+        ValueError, 'Collection z was not registered at initialization')
+
+def test_undo_expire_documents_noop(arango_db):
+    """
+    Test that un-expiring documents at a specific expiration time is a noop when there are no
+    matching documents.
+    """
+    vertcol = create_timetravel_collection(arango_db, 'v')
+    edgecol = create_timetravel_collection(arango_db, 'e', edge=True)
+    arango_db.create_collection('reg')
+    
+    att = ArangoBatchTimeTravellingDB(arango_db, 'reg', 'v', edge_collections=['e'])
+
+    for col, edge in [(vertcol, False), (edgecol, True)]:
+        actual_td, actual_expected = _prep_data_for_revert_tests(col.name, edge)
+        col.import_bulk(actual_td)
+        att.undo_expire_documents(col.name, 301)
+    
+        check_docs(arango_db, actual_expected, col.name)
+
+def test_undo_expire_documents(arango_db):
+    """
+    Test un-expiring documents at a specific creation time.
+    """
+    vertcol = create_timetravel_collection(arango_db, 'v')
+    edgecol = create_timetravel_collection(arango_db, 'e', edge=True)
+    arango_db.create_collection('reg')
+    
+    att = ArangoBatchTimeTravellingDB(
+        arango_db, 'reg', 'v', edge_collections=['e'])
+
+    for col, edge in [(vertcol, False), (edgecol, True)]:
+        actual_td, actual_expected = _prep_data_for_revert_tests(col.name, edge)
+        col.import_bulk(actual_td)
+        att.undo_expire_documents(col.name, 300)
+        actual_expected[0]['expired'] = 9007199254740991
+        actual_expected[3]['expired'] = 9007199254740991
+    
+        check_docs(arango_db, actual_expected, col.name)
+
+def test_undo_expire_documents_fail_no_collection(arango_db):
+    """
+    Tests attempting to delete created documents on a non-existant collection.
+    """
+    create_timetravel_collection(arango_db, 'v')
+    create_timetravel_collection(arango_db, 'e', edge=True)
+    arango_db.create_collection('reg')
+    
+    att = ArangoBatchTimeTravellingDB(arango_db, 'reg', 'v', edge_collections=['e'])
+
+    check_exception(lambda: att.undo_expire_documents('a', 100),
+        ValueError, 'Collection a was not registered at initialization')
+
+def test_reset_last_version_noop(arango_db):
+    """
+    Test that resetting versions is a noop when there are no matching documents.
+    """
+    vertcol = create_timetravel_collection(arango_db, 'v')
+    edgecol = create_timetravel_collection(arango_db, 'e', edge=True)
+    arango_db.create_collection('reg')
+    
+    att = ArangoBatchTimeTravellingDB(arango_db, 'reg', 'v', edge_collections=['e'])
+
+    for col, edge in [(vertcol, False), (edgecol, True)]:
+        actual_td, actual_expected = _prep_data_for_revert_tests(col.name, edge)
+        col.import_bulk(actual_td)
+        att.reset_last_version(col.name, '3', '2')
+    
+        check_docs(arango_db, actual_expected, col.name)
+
+def test_reset_last_version(arango_db):
+    """
+    Test resetting the last versions on documents
+    """
+    vertcol = create_timetravel_collection(arango_db, 'v')
+    edgecol = create_timetravel_collection(arango_db, 'e', edge=True)
+    arango_db.create_collection('reg')
+    
+    att = ArangoBatchTimeTravellingDB(arango_db, 'reg', 'v', edge_collections=['e'])
+
+    for col, edge in [(vertcol, False), (edgecol, True)]:
+        actual_td, actual_expected = _prep_data_for_revert_tests(col.name, edge)
+        col.import_bulk(actual_td)
+        att.reset_last_version(col.name, '2', '0')
+        actual_expected[0]['last_version'] = '0'
+        actual_expected[3]['last_version'] = '0'
+        actual_expected[4]['last_version'] = '0'
+    
+        check_docs(arango_db, actual_expected, col.name)
+
+def test_reset_last_version_fail_no_collection(arango_db):
+    """
+    Tests attempting to delete created documents on a non-existant collection.
+    """
+    create_timetravel_collection(arango_db, 'v')
+    create_timetravel_collection(arango_db, 'e', edge=True)
+    arango_db.create_collection('reg')
+    
+    att = ArangoBatchTimeTravellingDB(arango_db, 'reg', 'v', edge_collections=['e'])
+
+    check_exception(lambda: att.reset_last_version('y', 'v2', 'v1'),
+        ValueError, 'Collection y was not registered at initialization')
+
 ####################################
 # Batch updater tests
 ####################################

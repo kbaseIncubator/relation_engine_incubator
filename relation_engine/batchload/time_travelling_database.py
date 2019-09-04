@@ -78,7 +78,7 @@ class ArangoBatchTimeTravellingDB:
         self._database = database
         self._merge_collection = None
         if merge_collection:
-            self._merge_collection = self._get_col(merge_collection, edge=True)
+            self._merge_collection = self._init_col(merge_collection, edge=True)
         self._default_edge_collection = default_edge_collection
         edgecols = set()
         if default_edge_collection:
@@ -87,11 +87,11 @@ class ArangoBatchTimeTravellingDB:
             edgecols.update(edge_collections)
         if not edgecols:
             raise ValueError("At least one edge collection must be specified")
-        self._vertex_collection = self._get_col(vertex_collection)
+        self._vertex_collection = self._init_col(vertex_collection)
         # TODO CODE could check if any loads are in progress for the namespace and bail if so
-        self._registry_collection = self._get_col(load_registry_collection)
+        self._registry_collection = self._init_col(load_registry_collection)
 
-        self._edgecols = {n: self._get_col(n, edge=True) for n in edgecols}
+        self._edgecols = {n: self._init_col(n, edge=True) for n in edgecols}
 
         self._id_indexes = self._check_indexes()
 
@@ -139,7 +139,7 @@ class ArangoBatchTimeTravellingDB:
         return True
 
     # if an edge is inserted into a non-edge collection _from and _to are silently dropped
-    def _get_col(self, collection, edge=False):
+    def _init_col(self, collection, edge=False):
         c = self._database.collection(collection)
         if not c.properties()['edge'] is edge: # this is a http call
             ctype = 'an edge' if edge else 'a vertex'
@@ -418,13 +418,73 @@ class ArangoBatchTimeTravellingDB:
     
     def _expire_extant_document_without_last_version(self, timestamp, version, col):
         self._database.aql.execute(
-        f"""
-        FOR d IN @@col
-            FILTER d.{_FLD_EXPIRED} >= @timestamp && d.{_FLD_CREATED} <= @timestamp
-            FILTER d.{_FLD_VER_LST} != @version
-            UPDATE d WITH {{{_FLD_EXPIRED}: @timestamp}} IN @@col
-        """,
-        bind_vars={'version': version, 'timestamp': timestamp, '@col': col.name},
+            f"""
+            FOR d IN @@col
+                FILTER d.{_FLD_EXPIRED} >= @timestamp && d.{_FLD_CREATED} <= @timestamp
+                FILTER d.{_FLD_VER_LST} != @version
+                UPDATE d WITH {{{_FLD_EXPIRED}: @timestamp}} IN @@col
+            """,
+            bind_vars={'version': version, 'timestamp': timestamp, '@col': col.name},
+        )
+
+    # TODO PERF could add created index to speed this up
+    def delete_created_documents(self, collection, creation_time):
+        """
+        Deletes any documents in the collection that were created at the given time.
+
+        collection - the collection to modify.
+        creation_time - the time of creation, in unix epoch milliseconds, of the documents to
+          delete.
+        """
+        col = self._get_collection(collection) # ensure collection exists
+        self._database.aql.execute(
+            f"""
+            FOR d IN @@col
+                FILTER d.{_FLD_CREATED} == @timestamp
+                REMOVE d IN @@col
+            """,
+            bind_vars={'timestamp': creation_time, '@col': col.name},
+        )
+
+    def undo_expire_documents(self, collection, expire_time):
+        """
+        Unexpires any documents that were expired at the given time.
+
+        collection - the collection to modify
+        expire_time - the time of expiration, in unix epoch milliseconds, of the documents to
+          un-expire.
+        """
+        col = self._get_collection(collection) # ensure collection exists
+        self._database.aql.execute(
+            f"""
+            FOR d IN @@col
+                FILTER d.{_FLD_EXPIRED} == @timestamp
+                UPDATE d WITH {{{_FLD_EXPIRED}: {_MAX_ADB_INTEGER}}} IN @@col
+            """,
+            bind_vars={'timestamp': expire_time, '@col': col.name},
+        )
+
+    # TODO PERF could add last_version index to speed this up
+    def reset_last_version(self, collection, last_version, new_last_version):
+        """
+        Updates documents from one last version to another. Only documents with the given last
+        version are affected.
+
+        collection - the collection to modify
+        last_version - any documents with this last_version will be modified.
+        new_last_version - the documents will be modified to this last version.
+        """
+        col = self._get_collection(collection) # ensure collection exists
+        self._database.aql.execute(
+            f"""
+            FOR d IN @@col
+                FILTER d.{_FLD_VER_LST} == @last_version
+                UPDATE d WITH {{{_FLD_VER_LST}: @new_last}} IN @@col
+            """,
+            bind_vars={
+                'last_version': last_version,
+                'new_last': new_last_version,
+                '@col': col.name},
         )
 
     # mutates in place!
@@ -432,6 +492,16 @@ class ArangoBatchTimeTravellingDB:
         for k in _INTERNAL_ARANGO_FIELDS:
             del obj[k] 
         return obj
+
+    def _get_collection(self, collection):
+        if self._vertex_collection.name == collection:
+            return self._vertex_collection
+        # again doesn't work without the is not None part. Dunno why.
+        if self._merge_collection is not None and collection == self._merge_collection.name:
+            return self._merge_collection
+        if collection not in self._edgecols:
+            raise ValueError(f'Collection {collection} was not registered at initialization')
+        return self._edgecols[collection]
 
     def _get_edge_collection(self, collection):
         if not collection:
