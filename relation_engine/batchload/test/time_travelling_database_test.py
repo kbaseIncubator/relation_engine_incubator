@@ -1779,14 +1779,14 @@ def test_batch_expire_edge_fail_not_edge_collection(arango_db):
 # DB factory tests
 ####################################
 
-def test_preinit_get_registry_collection(arango_db):
+def test_factory_get_registry_collection(arango_db):
     arango_db.create_collection('reg')
 
     pi = ArangoBatchTimeTravellingDBFactory(arango_db, 'reg')
 
     assert pi.get_registry_collection() == 'reg'
 
-def test_preinit_get_instance(arango_db):
+def test_factory_get_instance(arango_db):
     arango_db.create_collection('reg')
 
     pi = ArangoBatchTimeTravellingDBFactory(arango_db, 'reg')
@@ -1806,6 +1806,12 @@ def test_preinit_get_instance(arango_db):
     assert att.get_edge_collections() == ['e1', 'e2', 'edef']
     assert att.get_merge_collection() == 'm'
 
+def test_factory_fail_bad_registry_collection(arango_db):
+    create_timetravel_collection(arango_db, 'r', edge=True)
+
+    check_exception(
+        lambda: ArangoBatchTimeTravellingDBFactory(arango_db, 'r'),
+        ValueError, 'r is not a vertex collection')
 
 ####################################
 # Helper funcs
