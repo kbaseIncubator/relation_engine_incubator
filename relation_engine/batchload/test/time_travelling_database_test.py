@@ -351,8 +351,6 @@ def test_register_load_complete(arango_db):
 
     check_docs(arango_db, expected, 'reg')
 
-import json
-
 def test_get_registered_loads_empty(arango_db):
     create_timetravel_collection(arango_db, 'v')
     create_timetravel_collection(arango_db, 'e', edge=True)
