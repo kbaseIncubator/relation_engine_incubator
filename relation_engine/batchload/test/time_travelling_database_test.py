@@ -1782,14 +1782,14 @@ def test_batch_expire_edge_fail_not_edge_collection(arango_db):
 def test_factory_get_registry_collection(arango_db):
     arango_db.create_collection('reg')
 
-    pi = ArangoBatchTimeTravellingDBFactory(arango_db, 'reg')
+    fac = ArangoBatchTimeTravellingDBFactory(arango_db, 'reg')
 
-    assert pi.get_registry_collection() == 'reg'
+    assert fac.get_registry_collection() == 'reg'
 
 def test_factory_get_instance(arango_db):
     arango_db.create_collection('reg')
 
-    pi = ArangoBatchTimeTravellingDBFactory(arango_db, 'reg')
+    fac = ArangoBatchTimeTravellingDBFactory(arango_db, 'reg')
 
     create_timetravel_collection(arango_db, 'v')
     create_timetravel_collection(arango_db, 'edef', edge=True)
@@ -1797,7 +1797,7 @@ def test_factory_get_instance(arango_db):
     create_timetravel_collection(arango_db, 'e2', edge=True)
     create_timetravel_collection(arango_db, 'm', edge=True)
 
-    att = pi.get_instance('v', default_edge_collection='edef', edge_collections=['e1', 'e2'],
+    att = fac.get_instance('v', default_edge_collection='edef', edge_collections=['e1', 'e2'],
         merge_collection='m')
 
     assert att.get_registry_collection() == 'reg'
@@ -1812,6 +1812,99 @@ def test_factory_fail_bad_registry_collection(arango_db):
     check_exception(
         lambda: ArangoBatchTimeTravellingDBFactory(arango_db, 'r'),
         ValueError, 'r is not a vertex collection')
+
+def test_factory_get_registered_loads_empty(arango_db):
+    """
+    Test getting the set of registered loads when there are none to get from a db factory.
+    """
+    create_timetravel_collection(arango_db, 'v')
+    create_timetravel_collection(arango_db, 'e', edge=True)
+    arango_db.create_collection('reg')
+
+    att = ArangoBatchTimeTravellingDB(arango_db, 'reg', 'v', edge_collections=['e'])
+
+    att.register_load_start('ns2', 'v3', 700, 400)
+
+    fac = ArangoBatchTimeTravellingDBFactory(arango_db, 'reg')
+
+    assert fac.get_registered_loads('ns1') == []
+
+def test_factory_get_registered_loads(arango_db):
+    """
+    Test getting the set of registered loads from a db factory.
+    """
+    create_timetravel_collection(arango_db, 'v')
+    create_timetravel_collection(arango_db, 'e', edge=True)
+    arango_db.create_collection('reg')
+
+    att = ArangoBatchTimeTravellingDB(arango_db, 'reg', 'v', edge_collections=['e'])
+
+    att.register_load_start('ns1', 'v3', 700, 400)
+    att.register_load_start('ns1', 'v1', 500, 300)
+    att.register_load_complete('ns1', 'v1', 350)
+    att.register_load_start('ns1', 'v2', 600, 360)
+    att.register_load_complete('ns1', 'v2', 390)
+    att.register_load_start('ns2', 'v3', 700, 400)
+
+    expected = [
+        {'_key': 'ns1_v3',
+         '_id': 'reg/ns1_v3',
+         'load_namespace': 'ns1',
+         'load_version': 'v3',
+         'load_timestamp': 700,
+         'start_time': 400,
+         'completion_time': None,
+         'state': 'in_progress',
+         'vertex_collection': 'v',
+         'merge_collection': None, 
+         'edge_collections': ['e']
+        },
+        {'_key': 'ns1_v2',
+         '_id': 'reg/ns1_v2',
+         'load_namespace': 'ns1',
+         'load_version': 'v2',
+         'load_timestamp': 600,
+         'start_time': 360,
+         'completion_time': 390,
+         'state': 'complete',
+         'vertex_collection': 'v',
+         'merge_collection': None, 
+         'edge_collections': ['e']
+        },
+        {'_key': 'ns1_v1',
+         '_id': 'reg/ns1_v1',
+         'load_namespace': 'ns1',
+         'load_version': 'v1',
+         'load_timestamp': 500,
+         'start_time': 300,
+         'completion_time': 350,
+         'state': 'complete',
+         'vertex_collection': 'v',
+         'merge_collection': None, 
+         'edge_collections': ['e']
+        },
+    ]
+
+    fac = ArangoBatchTimeTravellingDBFactory(arango_db, 'reg')
+    got = fac.get_registered_loads('ns1')
+    assert got == expected
+
+    expected = [
+        {'_key': 'ns2_v3',
+         '_id': 'reg/ns2_v3',
+         'load_namespace': 'ns2',
+         'load_version': 'v3',
+         'load_timestamp': 700,
+         'start_time': 400,
+         'completion_time': None,
+         'state': 'in_progress',
+         'vertex_collection': 'v',
+         'merge_collection': None, 
+         'edge_collections': ['e']
+        },
+    ]
+    got = fac.get_registered_loads('ns2')
+    assert got == expected
 
 ####################################
 # Helper funcs

@@ -67,6 +67,15 @@ class ArangoBatchTimeTravellingDBFactory:
         """
         return self._registry_collection.name
 
+    def get_registered_loads(self, load_namespace):
+        """
+        Returns all the registered loads for a namespace sorted by load timestamp from newest to
+        oldest.
+
+        load_namespace - the namespace of the loads to return.
+        """
+        return _get_registered_loads(self._database, self._registry_collection, load_namespace)
+
     def get_instance(
             self,
             vertex_collection,
