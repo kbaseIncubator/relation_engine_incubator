@@ -351,7 +351,23 @@ def test_register_load_complete(arango_db):
 
     check_docs(arango_db, expected, 'reg')
 
+def test_register_load_complete_fail_not_started(arango_db):
+    """
+    Test the case where a load is not registered and so cannot be completed.
+    """
+    create_timetravel_collection(arango_db, 'v')
+    create_timetravel_collection(arango_db, 'e', edge=True)
+    arango_db.create_collection('reg')
+
+    att = ArangoBatchTimeTravellingDB(arango_db, 'reg', 'v', edge_collections=['e'])
+
+    check_exception(lambda: att.register_load_complete('GeneOntology', '09-08-07', 800),
+        ValueError, 'Load is not registered, cannot be completed')
+
 def test_get_registered_loads_empty(arango_db):
+    """
+    Test getting the set of registered loads when there are none to get.
+    """
     create_timetravel_collection(arango_db, 'v')
     create_timetravel_collection(arango_db, 'e', edge=True)
     arango_db.create_collection('reg')
@@ -363,6 +379,9 @@ def test_get_registered_loads_empty(arango_db):
     assert att.get_registered_loads('ns1') == []
 
 def test_get_registered_loads(arango_db):
+    """
+    Test getting the set of registered loads.
+    """
     create_timetravel_collection(arango_db, 'v')
     create_timetravel_collection(arango_db, 'e', edge=True)
     arango_db.create_collection('reg')
@@ -434,9 +453,9 @@ def test_get_registered_loads(arango_db):
     got = att.get_registered_loads('ns2')
     assert got == expected
 
-def test_register_load_complete_fail_not_started(arango_db):
+def test_delete_registered_load(arango_db):
     """
-    Test the case where a load is not registered and so cannot be completed.
+    Test deleting a registered load.
     """
     create_timetravel_collection(arango_db, 'v')
     create_timetravel_collection(arango_db, 'e', edge=True)
@@ -444,8 +463,58 @@ def test_register_load_complete_fail_not_started(arango_db):
 
     att = ArangoBatchTimeTravellingDB(arango_db, 'reg', 'v', edge_collections=['e'])
 
-    check_exception(lambda: att.register_load_complete('GeneOntology', '09-08-07', 800),
-        ValueError, 'Load is not registered, cannot be completed')
+    att.register_load_start('ns1', 'v3', 700, 400)
+    att.register_load_start('ns1', 'v1', 500, 300)
+    att.register_load_complete('ns1', 'v1', 350)
+    att.register_load_start('ns1', 'v2', 600, 360)
+    att.register_load_complete('ns1', 'v2', 390)
+    att.delete_registered_load('ns1', 'v3')
+
+    expected = [
+        {'_key': 'ns1_v2',
+         '_id': 'reg/ns1_v2',
+         'load_namespace': 'ns1',
+         'load_version': 'v2',
+         'load_timestamp': 600,
+         'start_time': 360,
+         'completion_time': 390,
+         'state': 'complete',
+         'vertex_collection': 'v',
+         'merge_collection': None, 
+         'edge_collections': ['e']
+        },
+        {'_key': 'ns1_v1',
+         '_id': 'reg/ns1_v1',
+         'load_namespace': 'ns1',
+         'load_version': 'v1',
+         'load_timestamp': 500,
+         'start_time': 300,
+         'completion_time': 350,
+         'state': 'complete',
+         'vertex_collection': 'v',
+         'merge_collection': None, 
+         'edge_collections': ['e']
+        },
+    ]
+    got = att.get_registered_loads('ns1')
+    assert got == expected
+
+def test_delete_registered_load_fail_no_load(arango_db):
+    """
+    Test failure of a registered load deletion because there's nothing to delete.
+    """
+    create_timetravel_collection(arango_db, 'v')
+    create_timetravel_collection(arango_db, 'e', edge=True)
+    arango_db.create_collection('reg')
+
+    att = ArangoBatchTimeTravellingDB(arango_db, 'reg', 'v', edge_collections=['e'])
+
+    att.register_load_start('ns1', 'v3', 700, 400)
+    att.register_load_start('ns1', 'v1', 500, 300)
+    att.register_load_complete('ns1', 'v1', 350)
+
+    check_exception(lambda: att.delete_registered_load('ns1', 'v2'),
+        ValueError, 'There is no load version v2 in namespace ns1')
 
 def test_get_vertices(arango_db):
     """

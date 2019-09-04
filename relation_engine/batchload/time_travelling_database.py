@@ -11,6 +11,7 @@ more classes and methods can be added as needed.
 # TODO CODE check id, from, and to for validity per https://www.arangodb.com/docs/stable/data-modeling-naming-conventions-document-keys.html
 
 from arango.exceptions import AQLQueryExecuteError as _AQLQueryExecuteError
+from arango.exceptions import DocumentDeleteError as _DocumentDeleteError
 
 _INTERNAL_ARANGO_FIELDS = ['_rev']
 
@@ -217,6 +218,17 @@ class ArangoBatchTimeTravellingDB:
             bind_vars = {'load_namespace': load_namespace, '@col': self._registry_collection.name}
         )
         return [self._clean(d) for d in cur]
+
+    def delete_registered_load(self, load_namespace, load_version):
+        """
+        Deletes a load from the registry.
+        """
+        try:
+            self._registry_collection.delete({_FLD_KEY: load_namespace + '_' + load_version})
+        except _DocumentDeleteError as e:
+            if e.error_code == 1202:
+                raise ValueError(f'There is no load version {load_version} ' +
+                    f'in namespace {load_namespace}')
 
     def get_vertex_collection(self):
         """
