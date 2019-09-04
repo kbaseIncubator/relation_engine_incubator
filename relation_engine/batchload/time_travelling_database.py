@@ -168,8 +168,8 @@ class ArangoBatchTimeTravellingDB:
         
         try:
             self._database.aql.execute(
-            f'INSERT @d in @@col',
-            bind_vars={'d': doc, '@col': self._registry_collection.name}
+                f'INSERT @d in @@col',
+                bind_vars={'d': doc, '@col': self._registry_collection.name}
             )
         except _AQLQueryExecuteError as e:
             if e.error_code == 1210:
@@ -190,13 +190,33 @@ class ArangoBatchTimeTravellingDB:
         
         try:
             self._database.aql.execute(
-            f'UPDATE @d in @@col',
-            bind_vars={'d': doc, '@col': self._registry_collection.name}
+                f'UPDATE @d in @@col',
+                bind_vars={'d': doc, '@col': self._registry_collection.name}
             )
         except _AQLQueryExecuteError as e:
             if e.error_code == 1202:
                 raise ValueError('Load is not registered, cannot be completed')
             raise e
+
+    # TODO DOCS document fields
+    # probably few enough of these that indexes aren't needed
+    def get_registered_loads(self, load_namespace):
+        """
+        Returns all the registered loads for a namespace sorted by load timestamp from newest to
+        oldest.
+
+        load_namespace - the namespace of the loads to return.
+        """
+        cur = self._database.aql.execute(
+            f"""
+            FOR d in @@col
+                FILTER d.{_FLD_RGSTR_LOAD_NAMESPACE} == @load_namespace
+                SORT d.{_FLD_RGSTR_LOAD_TIMESTAMP} DESC
+                return d
+            """,
+            bind_vars = {'load_namespace': load_namespace, '@col': self._registry_collection.name}
+        )
+        return [self._clean(d) for d in cur]
 
     def get_vertex_collection(self):
         """

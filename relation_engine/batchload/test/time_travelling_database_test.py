@@ -322,7 +322,6 @@ def test_register_load_start_fail_doc_exists(arango_db):
     check_exception(lambda: att.register_load_start('GeneOntology', '09-08-07', 8000, 400),
         ValueError, 'Load is already registered')
 
-
 def test_register_load_complete(arango_db):
     """
     Tests registering the completion of a load with the db.
@@ -351,6 +350,91 @@ def test_register_load_complete(arango_db):
     }]
 
     check_docs(arango_db, expected, 'reg')
+
+import json
+
+def test_get_registered_loads_empty(arango_db):
+    create_timetravel_collection(arango_db, 'v')
+    create_timetravel_collection(arango_db, 'e', edge=True)
+    arango_db.create_collection('reg')
+
+    att = ArangoBatchTimeTravellingDB(arango_db, 'reg', 'v', edge_collections=['e'])
+
+    att.register_load_start('ns2', 'v3', 700, 400)
+
+    assert att.get_registered_loads('ns1') == []
+
+def test_get_registered_loads(arango_db):
+    create_timetravel_collection(arango_db, 'v')
+    create_timetravel_collection(arango_db, 'e', edge=True)
+    arango_db.create_collection('reg')
+
+    att = ArangoBatchTimeTravellingDB(arango_db, 'reg', 'v', edge_collections=['e'])
+
+    att.register_load_start('ns1', 'v3', 700, 400)
+    att.register_load_start('ns1', 'v1', 500, 300)
+    att.register_load_complete('ns1', 'v1', 350)
+    att.register_load_start('ns1', 'v2', 600, 360)
+    att.register_load_complete('ns1', 'v2', 390)
+    att.register_load_start('ns2', 'v3', 700, 400)
+
+    expected = [
+        {'_key': 'ns1_v3',
+         '_id': 'reg/ns1_v3',
+         'load_namespace': 'ns1',
+         'load_version': 'v3',
+         'load_timestamp': 700,
+         'start_time': 400,
+         'completion_time': None,
+         'state': 'in_progress',
+         'vertex_collection': 'v',
+         'merge_collection': None, 
+         'edge_collections': ['e']
+        },
+        {'_key': 'ns1_v2',
+         '_id': 'reg/ns1_v2',
+         'load_namespace': 'ns1',
+         'load_version': 'v2',
+         'load_timestamp': 600,
+         'start_time': 360,
+         'completion_time': 390,
+         'state': 'complete',
+         'vertex_collection': 'v',
+         'merge_collection': None, 
+         'edge_collections': ['e']
+        },
+        {'_key': 'ns1_v1',
+         '_id': 'reg/ns1_v1',
+         'load_namespace': 'ns1',
+         'load_version': 'v1',
+         'load_timestamp': 500,
+         'start_time': 300,
+         'completion_time': 350,
+         'state': 'complete',
+         'vertex_collection': 'v',
+         'merge_collection': None, 
+         'edge_collections': ['e']
+        },
+    ]
+    got = att.get_registered_loads('ns1')
+    assert got == expected
+
+    expected = [
+        {'_key': 'ns2_v3',
+         '_id': 'reg/ns2_v3',
+         'load_namespace': 'ns2',
+         'load_version': 'v3',
+         'load_timestamp': 700,
+         'start_time': 400,
+         'completion_time': None,
+         'state': 'in_progress',
+         'vertex_collection': 'v',
+         'merge_collection': None, 
+         'edge_collections': ['e']
+        },
+    ]
+    got = att.get_registered_loads('ns2')
+    assert got == expected
 
 def test_register_load_complete_fail_not_started(arango_db):
     """
