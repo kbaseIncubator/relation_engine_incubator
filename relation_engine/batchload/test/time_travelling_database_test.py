@@ -26,6 +26,14 @@ def arango_db():
 
     sys.delete_database(DB_NAME)
 
+def test_get_registry_collection(arango_db):
+    create_timetravel_collection(arango_db, 'v')
+    create_timetravel_collection(arango_db, 'e', edge=True)
+    arango_db.create_collection('reg')
+
+    att = ArangoBatchTimeTravellingDB(arango_db, 'reg', 'v', default_edge_collection='e')
+    assert att.get_registry_collection() == 'reg'
+
 def test_get_vertex_collection(arango_db):
     create_timetravel_collection(arango_db, 'v')
     create_timetravel_collection(arango_db, 'e', edge=True)

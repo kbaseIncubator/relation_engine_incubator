@@ -141,11 +141,13 @@ class ArangoBatchTimeTravellingDB:
 
     # if an edge is inserted into a non-edge collection _from and _to are silently dropped
     def _init_col(self, collection, edge=False):
-        c = self._database.collection(collection)
-        if not c.properties()['edge'] is edge: # this is a http call
-            ctype = 'an edge' if edge else 'a vertex'
-            raise ValueError(f'{collection} is not {ctype} collection')
-        return c
+        return _init_collection(self._database, collection, edge)
+
+    def get_registry_collection(self):
+        """
+        Returns the name of the registry collection.
+        """
+        return self._registry_collection.name
 
     def register_load_start(self, load_namespace, load_version, timestamp, current_time):
         """
@@ -199,8 +201,6 @@ class ArangoBatchTimeTravellingDB:
                 raise ValueError('Load is not registered, cannot be completed')
             raise e
 
-    # TODO DOCS document fields
-    # probably few enough of these that indexes aren't needed
     def get_registered_loads(self, load_namespace):
         """
         Returns all the registered loads for a namespace sorted by load timestamp from newest to
@@ -208,16 +208,7 @@ class ArangoBatchTimeTravellingDB:
 
         load_namespace - the namespace of the loads to return.
         """
-        cur = self._database.aql.execute(
-            f"""
-            FOR d in @@col
-                FILTER d.{_FLD_RGSTR_LOAD_NAMESPACE} == @load_namespace
-                SORT d.{_FLD_RGSTR_LOAD_TIMESTAMP} DESC
-                return d
-            """,
-            bind_vars = {'load_namespace': load_namespace, '@col': self._registry_collection.name}
-        )
-        return [self._clean(d) for d in cur]
+        return _get_registered_loads(self._database, self._registry_collection, load_namespace)
 
     def delete_registered_load(self, load_namespace, load_version):
         """
@@ -289,7 +280,7 @@ class ArangoBatchTimeTravellingDB:
                 if d[_FLD_ID] in ret:
                     raise ValueError(f'db contains > 1 document for id {d[_FLD_ID]}, ' +
                         f'timestamp {timestamp}, collection {collection_name}')
-                ret[d[_FLD_ID]] = self._clean(d)
+                ret[d[_FLD_ID]] = _clean(d)
         finally:
             cur.close(ignore_missing=True)
         return ret
@@ -519,12 +510,6 @@ class ArangoBatchTimeTravellingDB:
                 '@col': col.name},
         )
 
-    # mutates in place!
-    def _clean(self, obj):
-        for k in _INTERNAL_ARANGO_FIELDS:
-            del obj[k] 
-        return obj
-
     def _get_collection(self, collection):
         if self._vertex_collection.name == collection:
             return self._vertex_collection
@@ -740,3 +725,31 @@ def _create_edge(
     data[_FLD_CREATED] = created_time
     data[_FLD_EXPIRED] = _MAX_ADB_INTEGER
     return data
+
+# if an edge is inserted into a non-edge collection _from and _to are silently dropped
+def _init_collection(database, collection, edge=False):
+    c = database.collection(collection)
+    if not c.properties()['edge'] is edge: # this is a http call
+        ctype = 'an edge' if edge else 'a vertex'
+        raise ValueError(f'{collection} is not {ctype} collection')
+    return c
+
+# mutates in place!
+def _clean(obj):
+    for k in _INTERNAL_ARANGO_FIELDS:
+        del obj[k] 
+    return obj
+
+# TODO DOCS document fields
+# probably few enough of these that indexes aren't needed
+def _get_registered_loads(database, registry_collection, load_namespace):
+    cur = database.aql.execute(
+        f"""
+        FOR d in @@col
+            FILTER d.{_FLD_RGSTR_LOAD_NAMESPACE} == @load_namespace
+            SORT d.{_FLD_RGSTR_LOAD_TIMESTAMP} DESC
+            return d
+        """,
+        bind_vars = {'load_namespace': load_namespace, '@col': registry_collection.name}
+    )
+    return [_clean(d) for d in cur]
