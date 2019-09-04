@@ -10,7 +10,8 @@
 # TODO TEST add unit tests for the delta load algorithm with a db mock.
 
 from relation_engine.batchload.time_travelling_database import ArangoBatchTimeTravellingDB
-from relation_engine.batchload.delta_load import load_graph_delta
+from relation_engine.batchload.time_travelling_database import ArangoBatchTimeTravellingDBFactory
+from relation_engine.batchload.delta_load import load_graph_delta, roll_back_last_load
 from relation_engine.batchload.test.test_helpers import create_timetravel_collection
 from relation_engine.batchload.test.test_helpers import check_docs, check_exception
 from arango import ArangoClient
@@ -34,6 +35,10 @@ def arango_db():
     yield db
 
     sys.delete_database(DB_NAME)
+
+##########################################
+# Delta load tests
+##########################################
 
 def test_merge_setup_fail(arango_db):
     """
@@ -260,7 +265,7 @@ def _load_no_merge_source(arango_db, batchsize):
         'edge_collections': ['def_e', 'e1', 'e2']
     }
 
-    _check_registry_doc(arango_db, registry_expected, 'r')
+    _check_registry_doc(arango_db, registry_expected, 'r', compare_times_to_now=True)
 
 
 def test_merge_edges(arango_db):
@@ -360,7 +365,221 @@ def test_merge_edges(arango_db):
         'edge_collections': ['e']
     }
 
+    _check_registry_doc(arango_db, registry_expected, 'r', compare_times_to_now=True)
+
+######################################
+# Rollback tests
+######################################
+
+def test_rollback_fail_nothing_to_roll_back(arango_db):
+    """
+    Test that a rollback fails if theres < 2 loads registered.
+    """
+    create_timetravel_collection(arango_db, 'v')
+    create_timetravel_collection(arango_db, 'e', edge=True)
+    arango_db.create_collection('r')
+
+    db = ArangoBatchTimeTravellingDB(arango_db, 'r', 'v', default_edge_collection='e')
+    
+    db.register_load_start('ns1', 'v1', 1000, 100)
+    db.register_load_complete('ns1', 'v1', 150)
+
+    check_exception(lambda: roll_back_last_load(db, 'ns1'), ValueError,
+        'Nothing to roll back')
+
+def test_rollback_with_merge_collection(arango_db):
+    """
+    Test rolling back a load including a merge collection.
+    """
+    vcol = create_timetravel_collection(arango_db, 'v')
+    edcol = create_timetravel_collection(arango_db, 'def_e', edge=True)
+    e1col = create_timetravel_collection(arango_db, 'e1', edge=True)
+    e2col = create_timetravel_collection(arango_db, 'e2', edge=True)
+    mcol = create_timetravel_collection(arango_db, 'm', edge=True)
+    arango_db.create_collection('r')
+
+    m = ADB_MAX_TIME
+
+    _import_v(vcol, {'id': '1', 'k': '1'}, 0, m, 'v1', 'v2')
+    _import_v(vcol, {'id': '2', 'k': '2'}, 300, m, 'v2', 'v2')
+    _import_v(vcol, {'id': '3', 'k': '3'}, 0, 299, 'v1', 'v1')
+    _import_v(vcol, {'id': '3', 'k': '3'}, 300, m, 'v2', 'v2')
+    _import_v(vcol, {'id': '4', 'k': '4'}, 0, 299, 'v1', 'v1')
+
+    _import_e(edcol, {'id': '1', 'to': '1', 'from': '1', 'k': '1'}, 0, m, 'v1', 'v2', 'f')
+    _import_e(edcol, {'id': '2', 'to': '2', 'from': '2', 'k': '2'}, 300, m, 'v2', 'v2', 'f')
+
+    _import_e(e1col, {'id': '1', 'to': '1', 'from': '1', 'k': '1'}, 0, 299, 'v1', 'v1', 'f')
+    _import_e(e1col, {'id': '1', 'to': '1', 'from': '1', 'k': '1'}, 300, m, 'v2', 'v2', 'f')
+
+    _import_e(e2col, {'id': '1', 'to': '1', 'from': '1', 'k': '1'}, 0, 299, 'v1', 'v1', 'f')
+
+    # merge edges are never updated once created
+    _import_e(mcol, {'id': '1', 'to': '1', 'from': '1', 'k': '1'}, 0, m, 'v1', 'v1', 'f')
+    _import_e(mcol, {'id': '2', 'to': '2', 'from': '2', 'k': '2'}, 300, m, 'v2', 'v2', 'f')
+
+    db = ArangoBatchTimeTravellingDB(arango_db, 'r', 'v', default_edge_collection='def_e',
+        edge_collections=['e1', 'e2'], merge_collection='m')
+
+    db.register_load_start('ns1', 'v1', 0, 4567)
+    db.register_load_complete('ns1', 'v1', 5678)
+    db.register_load_start('ns1', 'v2', 300, 6789)
+    db.register_load_complete('ns1', 'v2', 7890)
+
+    fac = ArangoBatchTimeTravellingDBFactory(arango_db, 'r')
+
+    roll_back_last_load(fac, 'ns1')
+
+    vexpected = [
+        {'id': '1', '_key': '1_v1', '_id': 'v/1_v1',
+         'first_version': 'v1', 'last_version': 'v1', 'created': 0, 'expired': ADB_MAX_TIME,
+         'k': '1'},
+        {'id': '3', '_key': '3_v1', '_id': 'v/3_v1',
+         'first_version': 'v1', 'last_version': 'v1', 'created': 0, 'expired': ADB_MAX_TIME,
+         'k': '3'},
+        {'id': '4', '_key': '4_v1', '_id': 'v/4_v1',
+         'first_version': 'v1', 'last_version': 'v1', 'created': 0, 'expired': ADB_MAX_TIME,
+         'k': '4'},
+    ]
+
+    check_docs(arango_db, vexpected, 'v')
+
+    ed_expected = [
+        {'id': '1', 'from': '1', 'to': '1',
+         '_key': '1_v1', '_id': 'def_e/1_v1', '_from': 'f/1_v1', '_to': 'f/1_v1',
+         'first_version': 'v1', 'last_version': 'v1', 'created': 0, 'expired': ADB_MAX_TIME,
+         'k': '1'},
+    ]
+
+    check_docs(arango_db, ed_expected, 'def_e')
+
+    e1_expected = [
+        {'id': '1', 'from': '1', 'to': '1',
+         '_key': '1_v1', '_id': 'e1/1_v1', '_from': 'f/1_v1', '_to': 'f/1_v1',
+         'first_version': 'v1', 'last_version': 'v1', 'created': 0, 'expired': ADB_MAX_TIME,
+         'k': '1'},
+    ]
+
+    check_docs(arango_db, e1_expected, 'e1')
+
+    e2_expected = [
+        {'id': '1', 'from': '1', 'to': '1',
+         '_key': '1_v1', '_id': 'e2/1_v1', '_from': 'f/1_v1', '_to': 'f/1_v1',
+         'first_version': 'v1', 'last_version': 'v1', 'created': 0, 'expired': ADB_MAX_TIME,
+         'k': '1'},
+    ]
+
+    check_docs(arango_db, e2_expected, 'e2')
+
+    m_expected = [
+        {'id': '1', 'from': '1', 'to': '1',
+         '_key': '1_v1', '_id': 'm/1_v1', '_from': 'f/1_v1', '_to': 'f/1_v1',
+         'first_version': 'v1', 'last_version': 'v1', 'created': 0, 'expired': ADB_MAX_TIME,
+         'k': '1'},
+    ]
+
+    check_docs(arango_db, m_expected, 'm')
+
+    registry_expected = {
+        '_key': 'ns1_v1',
+        '_id': 'r/ns1_v1',
+        'load_namespace': 'ns1',
+        'load_version': 'v1',
+        'load_timestamp': 0,
+        'start_time': 4567,
+        'completion_time': 5678,
+        'state': 'complete',
+        'vertex_collection': 'v',
+        'merge_collection': 'm', 
+        'edge_collections': ['def_e', 'e1', 'e2']
+    }
+
     _check_registry_doc(arango_db, registry_expected, 'r')
+
+# trying to combine with above got too messy
+def test_rollback_without_merge_collection(arango_db):
+    """
+    Test rolling back a load with no merge collection and only one edge collection.
+    """
+    vcol = create_timetravel_collection(arango_db, 'v')
+    ecol = create_timetravel_collection(arango_db, 'e', edge=True)
+    arango_db.create_collection('r')
+
+    m = ADB_MAX_TIME
+
+    _import_v(vcol, {'id': '1', 'k': '1'}, 0, m, 'v1', 'v2')
+    _import_v(vcol, {'id': '2', 'k': '2'}, 300, m, 'v2', 'v2')
+    _import_v(vcol, {'id': '3', 'k': '3'}, 0, 299, 'v1', 'v1')
+    _import_v(vcol, {'id': '3', 'k': '3'}, 300, m, 'v2', 'v2')
+    _import_v(vcol, {'id': '4', 'k': '4'}, 0, 299, 'v1', 'v1')
+
+    _import_e(ecol, {'id': '1', 'to': '1', 'from': '1', 'k': '1'}, 0, m, 'v1', 'v2', 'f')
+    _import_e(ecol, {'id': '2', 'to': '2', 'from': '2', 'k': '2'}, 300, m, 'v2', 'v2', 'f')
+    _import_e(ecol, {'id': '3', 'to': '3', 'from': '3', 'k': '3'}, 0, 299, 'v1', 'v1', 'f')
+    _import_e(ecol, {'id': '3', 'to': '3', 'from': '3', 'k': '3'}, 300, m, 'v2', 'v2', 'f')
+    _import_e(ecol, {'id': '4', 'to': '4', 'from': '4', 'k': '4'}, 0, 299, 'v1', 'v1', 'f')
+
+    db = ArangoBatchTimeTravellingDB(arango_db, 'r', 'v', default_edge_collection='e')
+
+    db.register_load_start('ns1', 'v1', 0, 4567)
+    db.register_load_complete('ns1', 'v1', 5678)
+    db.register_load_start('ns1', 'v2', 300, 6789)
+    db.register_load_complete('ns1', 'v2', 7890)
+
+    fac = ArangoBatchTimeTravellingDBFactory(arango_db, 'r')
+
+    roll_back_last_load(fac, 'ns1')
+
+    vexpected = [
+        {'id': '1', '_key': '1_v1', '_id': 'v/1_v1',
+         'first_version': 'v1', 'last_version': 'v1', 'created': 0, 'expired': ADB_MAX_TIME,
+         'k': '1'},
+        {'id': '3', '_key': '3_v1', '_id': 'v/3_v1',
+         'first_version': 'v1', 'last_version': 'v1', 'created': 0, 'expired': ADB_MAX_TIME,
+         'k': '3'},
+        {'id': '4', '_key': '4_v1', '_id': 'v/4_v1',
+         'first_version': 'v1', 'last_version': 'v1', 'created': 0, 'expired': ADB_MAX_TIME,
+         'k': '4'},
+    ]
+
+    check_docs(arango_db, vexpected, 'v')
+
+    e_expected = [
+        {'id': '1', 'from': '1', 'to': '1',
+         '_key': '1_v1', '_id': 'e/1_v1', '_from': 'f/1_v1', '_to': 'f/1_v1',
+         'first_version': 'v1', 'last_version': 'v1', 'created': 0, 'expired': ADB_MAX_TIME,
+         'k': '1'},
+        {'id': '3', 'from': '3', 'to': '3',
+         '_key': '3_v1', '_id': 'e/3_v1', '_from': 'f/3_v1', '_to': 'f/3_v1',
+         'first_version': 'v1', 'last_version': 'v1', 'created': 0, 'expired': ADB_MAX_TIME,
+         'k': '3'},
+        {'id': '4', 'from': '4', 'to': '4',
+         '_key': '4_v1', '_id': 'e/4_v1', '_from': 'f/4_v1', '_to': 'f/4_v1',
+         'first_version': 'v1', 'last_version': 'v1', 'created': 0, 'expired': ADB_MAX_TIME,
+         'k': '4'},
+    ]
+
+    check_docs(arango_db, e_expected, 'e')
+
+    registry_expected = {
+        '_key': 'ns1_v1',
+        '_id': 'r/ns1_v1',
+        'load_namespace': 'ns1',
+        'load_version': 'v1',
+        'load_timestamp': 0,
+        'start_time': 4567,
+        'completion_time': 5678,
+        'state': 'complete',
+        'vertex_collection': 'v',
+        'merge_collection': None, 
+        'edge_collections': ['e']
+    }
+
+    _check_registry_doc(arango_db, registry_expected, 'r')
+
+######################################
+# Helper funcs
+######################################
 
 # modifies docs in place!
 # vert_col_name != None implies an edge
@@ -384,21 +603,45 @@ def _import_bulk(
         d['last_version'] = last_version
     col.import_bulk(docs)
 
-def _check_registry_doc(arango_db, expected, collection):
+# data will be modified in place
+def _import_v(col, data, created, expired, first_version, last_version):
+    d = data
+    d['_key'] = d['id'] + '_' + first_version
+    d['created'] = created
+    d['expired'] = expired
+    d['first_version'] = first_version
+    d['last_version'] = last_version
+    col.import_bulk([d])
+
+# data will be modified in place
+def _import_e(col, data, created, expired, first_version, last_version, vert_col_name):
+    d = data
+    d['_key'] = d['id'] + '_' + first_version
+    d['_from'] = vert_col_name + '/' + d['from'] + '_' + first_version
+    d['_to'] = vert_col_name + '/' + d['to'] + '_' + first_version
+    d['created'] = created
+    d['expired'] = expired
+    d['first_version'] = first_version
+    d['last_version'] = last_version
+    col.import_bulk([d])
+
+
+def _check_registry_doc(arango_db, expected, collection, compare_times_to_now=False):
     col = arango_db.collection(collection)
     assert col.count() == 1, 'Incorrect # of docs in registry collection ' + collection
     doc = col.get(expected['_key'])
     del doc['_rev']
-    start = doc['start_time']
-    del doc['start_time']
-    end = doc['completion_time']
-    del doc['completion_time']
+    if compare_times_to_now:
+        start = doc['start_time']
+        del doc['start_time']
+        end = doc['completion_time']
+        del doc['completion_time']
+        _assert_close_to_now_in_epoch_ms(start)
+        _assert_close_to_now_in_epoch_ms(end)
     
     assert expected == doc
-    _assert_close_to_now_in_epoch_ms(start)
-    _assert_close_to_now_in_epoch_ms(end)
 
 def _assert_close_to_now_in_epoch_ms(time):
     now = int(datetime.datetime.now(tz=datetime.timezone.utc).timestamp() * 1000)
     assert now - 2000 < time
-    assert now + 2000 > time
+    assert now + 2000 > time   

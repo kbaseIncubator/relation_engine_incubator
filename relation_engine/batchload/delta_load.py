@@ -238,3 +238,44 @@ def _chunkiter(iterable, size):
     iterator = iter(iterable)
     for first in iterator:
         yield _itertools.chain([first], _itertools.islice(iterator, size - 1))
+
+# TODO CODE fields here shared with the DB. Put them somewhere in common.
+def roll_back_last_load(database, load_namespace):
+    """
+    Removes the most recent data load to a namespace and reverts it to the prior state.
+
+    database - a wrapper for the database storing the graph. It must have the same interface as
+      batchload.time_travelling_database.ArangoBatchTimeTravellingDBFactory, which is
+      currently the only implementation of the interface.
+    load_namespace - the name of the data set that is to be reverted,
+        e.g. ncbi_taxa, gene_ontology, etc. Must be unique across all load sources.
+    """
+    loads = database.get_registered_loads(load_namespace)
+    # Was checking state == complete here, but that means if a load or rollback fails midway,
+    # it can't be rolled back. Rollbacks should generally always work.
+    # TODO CODE take an option to abort rollback if load not in complete state
+    if len(loads) < 2:
+        raise ValueError('Nothing to roll back')
+    timestamp = loads[0]['load_timestamp']
+    current_ver = loads[0]['load_version']
+    prior_ver = loads[1]['load_version']
+    collections = loads[0]['edge_collections'] + [loads[0]['vertex_collection']]
+    if loads[0]['merge_collection']:
+        collections.append(loads[0]['merge_collection'])
+    
+    db = database.get_instance(
+        loads[0]['vertex_collection'],
+        edge_collections=loads[0]['edge_collections'],
+        merge_collection=loads[0]['merge_collection'])
+
+    # This state change is transient and so is pretty hard to automatically test without
+    # somewhat complex unit tests that ensure this occurs prior to the data alterations.
+    # For now just testing manually
+    db.register_load_rollback(load_namespace, current_ver)
+
+    for c in collections:
+        db.delete_created_documents(c, timestamp)
+        db.undo_expire_documents(c, timestamp - 1)
+        db.reset_last_version(c, current_ver, prior_ver)
+    
+    db.delete_registered_load(load_namespace, current_ver)
