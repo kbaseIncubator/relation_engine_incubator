@@ -9,6 +9,7 @@ take this into account and take measures to prevent it.
 """
 
 from collections import defaultdict as _defaultdict
+import datetime as _dt
 import itertools as _itertools
 import time as _time
 
@@ -16,13 +17,14 @@ import time as _time
 # TODO DOCS document reserved fields that will be overwritten if supplied
 # TODO CODE add notification callback so that the caller can implement % complete or logs or whatever based on what's happening in the delta load algorithm. Remove _VERBOSE prints at that point
 
-# could consider threading / multiprocessing here. Virtually all the time is db access
+# TODO CODE consider threading / multiprocessing here. Virtually all the time is db access
 
 _VERBOSE = False
 _ID = 'id'
 _KEY = '_key'
 
 def load_graph_delta(
+        load_namespace,
         vertex_source,
         edge_source,
         database,
@@ -34,6 +36,8 @@ def load_graph_delta(
     Loads a new version of a graph into a graph database, calculating the delta between the graphs
     and expiring / creating new vertices and edges as neccessary.
 
+    load_namespace - the name of the data that is being loaded, e.g. ncbi_taxa, gene_ontology, etc.
+        Must be unique across all load sources.
     vertex_source - an iterator that produces vertices as dicts. An 'id' field is required that
       uniquely identifies the vertex in this load (and any previous loads in which it exists).
     edge_source - an iterator that produces edges as dicts. An 'id' field is required that
@@ -61,6 +65,8 @@ def load_graph_delta(
     if merge_source and not db.get_merge_collection():
         raise ValueError('A merge source is specified but the database ' +
            'has no merge collection')
+    db.register_load_start(load_namespace, load_version, timestamp, _get_current_timestamp())
+
     _process_verts(db, vertex_source, timestamp, load_version, batch_size)
     if merge_source:
         _process_merges(db, merge_source, timestamp, load_version, batch_size)
@@ -74,6 +80,11 @@ def load_graph_delta(
     for col in db.get_edge_collections():
         db.expire_extant_edges_without_last_version(
             timestamp - 1, load_version, edge_collection=col)
+
+    db.register_load_complete(load_namespace, load_version, _get_current_timestamp())
+
+def _get_current_timestamp():
+    return int(_dt.datetime.now(tz=_dt.timezone.utc).timestamp() * 1000)
 
 def _process_verts(db, vertex_source, timestamp, load_version, batch_size):
     """
