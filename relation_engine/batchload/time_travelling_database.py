@@ -45,12 +45,62 @@ _FLD_RGSTR_STATE_COMPLETE = 'complete'
 # in unix epoch ms this is 2255/6/5
 _MAX_ADB_INTEGER = 2**53 - 1
 
+class ArangoBatchTimeTravellingDBFactory:
+    """
+    This class allows for creating a time travelling database based on ArangoDB but delegating
+    collection selection, other than the registry collection, to downstream processing.
+
+    database - the python_arango ArangoDB database containing the data to query or modify.
+    load_registry_collection - the name of the collection where loads will be listed.
+    """
+    
+    # may want to make this an BatchTimeTravellingDBFactory interface, but pretty unlikely we'll switch...
+
+    def __init__(self, database, load_registry_collection):
+        self._database = database
+        # TODO CODE could check if any loads are in progress for the namespace and bail if so
+        self._registry_collection = _init_collection(database, load_registry_collection)
+
+    def get_registry_collection(self):
+        """
+        Returns the name of the registry collection.
+        """
+        return self._registry_collection.name
+
+    def get_instance(
+            self,
+            vertex_collection,
+            default_edge_collection=None,
+            edge_collections=None,
+            merge_collection=None):
+        """
+        Get a database instance configured with the given collections.
+
+        The collections are checked for exitence, type, and required indexes, which can be
+        expensive.
+
+        vertex_collection - the name of the collection to use for vertex operations.
+        default_edge_collection - the name of the collection to use for edge operations by default.
+          This can be overridden.
+        edge_collections - a list of any edge collections in the graph.
+          The collections are checked for existence and cached for performance reasons.
+        merge_collection - a collection containing edges that indicate that a node has been 
+          merged into another node.
+        """
+        return ArangoBatchTimeTravellingDB(
+            self._database,
+            self._registry_collection.name,
+            vertex_collection,
+            default_edge_collection=default_edge_collection,
+            edge_collections=edge_collections,
+            merge_collection=merge_collection)
+
 class ArangoBatchTimeTravellingDB:
     """
     A collection of methods for inserting and retrieving data from ArangoDB.
     """
 
-    # may want to make this an NCBIRelationEngine interface, but pretty unlikely we'll switch...
+    # may want to make this an BatchTimeTravellingDBFactory interface, but pretty unlikely we'll switch...
 
     def __init__(
             self,
@@ -62,6 +112,9 @@ class ArangoBatchTimeTravellingDB:
             merge_collection=None):
         """
         Create the DB interface.
+
+        The collections are checked for exitence, type, and required indexes, which can be
+        expensive.
 
         database - the python_arango ArangoDB database containing the data to query or modify.
         load_registry_collection - the name of the collection where loads will be listed.

@@ -5,6 +5,7 @@
 # TODO TEST more tests
 
 from relation_engine.batchload.time_travelling_database import ArangoBatchTimeTravellingDB
+from relation_engine.batchload.time_travelling_database import ArangoBatchTimeTravellingDBFactory
 from relation_engine.batchload.test.test_helpers import create_timetravel_collection
 from relation_engine.batchload.test.test_helpers import check_docs, check_exception
 from arango import ArangoClient
@@ -1773,6 +1774,38 @@ def test_batch_expire_edge_fail_not_edge_collection(arango_db):
 
     check_exception(lambda: b.expire_edge({}, 1), ValueError,
         'Batch updater is configured for a vertex collection')
+
+####################################
+# DB factory tests
+####################################
+
+def test_preinit_get_registry_collection(arango_db):
+    arango_db.create_collection('reg')
+
+    pi = ArangoBatchTimeTravellingDBFactory(arango_db, 'reg')
+
+    assert pi.get_registry_collection() == 'reg'
+
+def test_preinit_get_instance(arango_db):
+    arango_db.create_collection('reg')
+
+    pi = ArangoBatchTimeTravellingDBFactory(arango_db, 'reg')
+
+    create_timetravel_collection(arango_db, 'v')
+    create_timetravel_collection(arango_db, 'edef', edge=True)
+    create_timetravel_collection(arango_db, 'e1', edge=True)
+    create_timetravel_collection(arango_db, 'e2', edge=True)
+    create_timetravel_collection(arango_db, 'm', edge=True)
+
+    att = pi.get_instance('v', default_edge_collection='edef', edge_collections=['e1', 'e2'],
+        merge_collection='m')
+
+    assert att.get_registry_collection() == 'reg'
+    assert att.get_vertex_collection() == 'v'
+    assert att.get_default_edge_collection() == 'edef'
+    assert att.get_edge_collections() == ['e1', 'e2', 'edef']
+    assert att.get_merge_collection() == 'm'
+
 
 ####################################
 # Helper funcs
