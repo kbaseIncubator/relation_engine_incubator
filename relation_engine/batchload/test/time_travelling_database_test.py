@@ -373,6 +373,49 @@ def test_register_load_complete_fail_not_started(arango_db):
     check_exception(lambda: att.register_load_complete('GeneOntology', '09-08-07', 800),
         ValueError, 'Load is not registered, cannot be completed')
 
+def test_register_load_rollback(arango_db):
+    """
+    Tests registering the rollback of a load with the db.
+    """
+    create_timetravel_collection(arango_db, 'v')
+    create_timetravel_collection(arango_db, 'e', edge=True)
+    arango_db.create_collection('reg')
+
+    att = ArangoBatchTimeTravellingDB(arango_db, 'reg', 'v', edge_collections=['e'])
+
+    att.register_load_start('GeneOntology', '09-08-07', 1000, 500)
+    att.register_load_complete('GeneOntology', '09-08-07', 800)
+    att.register_load_rollback('GeneOntology', '09-08-07')
+
+    expected = [{
+        '_key': 'GeneOntology_09-08-07',
+        '_id': 'reg/GeneOntology_09-08-07',
+        'load_namespace': 'GeneOntology',
+        'load_version': '09-08-07',
+        'load_timestamp': 1000,
+        'start_time': 500,
+        'completion_time': 800,
+        'state': 'rollback',
+        'vertex_collection': 'v',
+        'merge_collection': None, 
+        'edge_collections': ['e']
+    }]
+
+    check_docs(arango_db, expected, 'reg')
+
+def test_register_load_rollback_fail_not_started(arango_db):
+    """
+    Test the case where a load is not registered and so cannot be rolled back.
+    """
+    create_timetravel_collection(arango_db, 'v')
+    create_timetravel_collection(arango_db, 'e', edge=True)
+    arango_db.create_collection('reg')
+
+    att = ArangoBatchTimeTravellingDB(arango_db, 'reg', 'v', edge_collections=['e'])
+
+    check_exception(lambda: att.register_load_rollback('GeneOntology', '09-08-07'),
+        ValueError, 'Load is not registered, cannot be rolled back')
+
 def test_get_registered_loads_empty(arango_db):
     """
     Test getting the set of registered loads when there are none to get.
