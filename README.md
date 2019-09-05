@@ -40,6 +40,10 @@ For small graphs the delta loader can be used to load the first instance of the 
 but since it will perform numerous unnecessary queries against the database to do the graph
 comparison, the bulk loader is typically faster.
 
+### Rolling back a load
+
+Loads can be rolled back with the `relation_engine/batchload/rollback_delta_load.py` script.
+
 ### Existing loaders
 
 #### NCBI Taxonomy Dump Format
