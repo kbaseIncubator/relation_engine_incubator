@@ -45,12 +45,62 @@ _FLD_RGSTR_STATE_COMPLETE = 'complete'
 # in unix epoch ms this is 2255/6/5
 _MAX_ADB_INTEGER = 2**53 - 1
 
+class ArangoBatchTimeTravellingDBFactory:
+    """
+    This class allows for creating a time travelling database based on ArangoDB but delegating
+    collection selection, other than the registry collection, to downstream processing.
+
+    database - the python_arango ArangoDB database containing the data to query or modify.
+    load_registry_collection - the name of the collection where loads will be listed.
+    """
+    
+    # may want to make this an BatchTimeTravellingDBFactory interface, but pretty unlikely we'll switch...
+
+    def __init__(self, database, load_registry_collection):
+        self._database = database
+        # TODO CODE could check if any loads are in progress for the namespace and bail if so
+        self._registry_collection = _init_collection(database, load_registry_collection)
+
+    def get_registry_collection(self):
+        """
+        Returns the name of the registry collection.
+        """
+        return self._registry_collection.name
+
+    def get_instance(
+            self,
+            vertex_collection,
+            default_edge_collection=None,
+            edge_collections=None,
+            merge_collection=None):
+        """
+        Get a database instance configured with the given collections.
+
+        The collections are checked for exitence, type, and required indexes, which can be
+        expensive.
+
+        vertex_collection - the name of the collection to use for vertex operations.
+        default_edge_collection - the name of the collection to use for edge operations by default.
+          This can be overridden.
+        edge_collections - a list of any edge collections in the graph.
+          The collections are checked for existence and cached for performance reasons.
+        merge_collection - a collection containing edges that indicate that a node has been 
+          merged into another node.
+        """
+        return ArangoBatchTimeTravellingDB(
+            self._database,
+            self._registry_collection.name,
+            vertex_collection,
+            default_edge_collection=default_edge_collection,
+            edge_collections=edge_collections,
+            merge_collection=merge_collection)
+
 class ArangoBatchTimeTravellingDB:
     """
     A collection of methods for inserting and retrieving data from ArangoDB.
     """
 
-    # may want to make this an NCBIRelationEngine interface, but pretty unlikely we'll switch...
+    # may want to make this an BatchTimeTravellingDBFactory interface, but pretty unlikely we'll switch...
 
     def __init__(
             self,
@@ -62,6 +112,9 @@ class ArangoBatchTimeTravellingDB:
             merge_collection=None):
         """
         Create the DB interface.
+
+        The collections are checked for exitence, type, and required indexes, which can be
+        expensive.
 
         database - the python_arango ArangoDB database containing the data to query or modify.
         load_registry_collection - the name of the collection where loads will be listed.
@@ -141,11 +194,13 @@ class ArangoBatchTimeTravellingDB:
 
     # if an edge is inserted into a non-edge collection _from and _to are silently dropped
     def _init_col(self, collection, edge=False):
-        c = self._database.collection(collection)
-        if not c.properties()['edge'] is edge: # this is a http call
-            ctype = 'an edge' if edge else 'a vertex'
-            raise ValueError(f'{collection} is not {ctype} collection')
-        return c
+        return _init_collection(self._database, collection, edge)
+
+    def get_registry_collection(self):
+        """
+        Returns the name of the registry collection.
+        """
+        return self._registry_collection.name
 
     def register_load_start(self, load_namespace, load_version, timestamp, current_time):
         """
@@ -199,8 +254,6 @@ class ArangoBatchTimeTravellingDB:
                 raise ValueError('Load is not registered, cannot be completed')
             raise e
 
-    # TODO DOCS document fields
-    # probably few enough of these that indexes aren't needed
     def get_registered_loads(self, load_namespace):
         """
         Returns all the registered loads for a namespace sorted by load timestamp from newest to
@@ -208,16 +261,7 @@ class ArangoBatchTimeTravellingDB:
 
         load_namespace - the namespace of the loads to return.
         """
-        cur = self._database.aql.execute(
-            f"""
-            FOR d in @@col
-                FILTER d.{_FLD_RGSTR_LOAD_NAMESPACE} == @load_namespace
-                SORT d.{_FLD_RGSTR_LOAD_TIMESTAMP} DESC
-                return d
-            """,
-            bind_vars = {'load_namespace': load_namespace, '@col': self._registry_collection.name}
-        )
-        return [self._clean(d) for d in cur]
+        return _get_registered_loads(self._database, self._registry_collection, load_namespace)
 
     def delete_registered_load(self, load_namespace, load_version):
         """
@@ -289,7 +333,7 @@ class ArangoBatchTimeTravellingDB:
                 if d[_FLD_ID] in ret:
                     raise ValueError(f'db contains > 1 document for id {d[_FLD_ID]}, ' +
                         f'timestamp {timestamp}, collection {collection_name}')
-                ret[d[_FLD_ID]] = self._clean(d)
+                ret[d[_FLD_ID]] = _clean(d)
         finally:
             cur.close(ignore_missing=True)
         return ret
@@ -519,12 +563,6 @@ class ArangoBatchTimeTravellingDB:
                 '@col': col.name},
         )
 
-    # mutates in place!
-    def _clean(self, obj):
-        for k in _INTERNAL_ARANGO_FIELDS:
-            del obj[k] 
-        return obj
-
     def _get_collection(self, collection):
         if self._vertex_collection.name == collection:
             return self._vertex_collection
@@ -740,3 +778,31 @@ def _create_edge(
     data[_FLD_CREATED] = created_time
     data[_FLD_EXPIRED] = _MAX_ADB_INTEGER
     return data
+
+# if an edge is inserted into a non-edge collection _from and _to are silently dropped
+def _init_collection(database, collection, edge=False):
+    c = database.collection(collection)
+    if not c.properties()['edge'] is edge: # this is a http call
+        ctype = 'an edge' if edge else 'a vertex'
+        raise ValueError(f'{collection} is not {ctype} collection')
+    return c
+
+# mutates in place!
+def _clean(obj):
+    for k in _INTERNAL_ARANGO_FIELDS:
+        del obj[k] 
+    return obj
+
+# TODO DOCS document fields
+# probably few enough of these that indexes aren't needed
+def _get_registered_loads(database, registry_collection, load_namespace):
+    cur = database.aql.execute(
+        f"""
+        FOR d in @@col
+            FILTER d.{_FLD_RGSTR_LOAD_NAMESPACE} == @load_namespace
+            SORT d.{_FLD_RGSTR_LOAD_TIMESTAMP} DESC
+            return d
+        """,
+        bind_vars = {'load_namespace': load_namespace, '@col': registry_collection.name}
+    )
+    return [_clean(d) for d in cur]
