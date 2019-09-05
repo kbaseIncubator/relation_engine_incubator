@@ -40,6 +40,7 @@ _FLD_RGSTR_COMPLETE_TIME = 'completion_time'
 _FLD_RGSTR_STATE = 'state'
 _FLD_RGSTR_STATE_IN_PROGRESS = 'in_progress'
 _FLD_RGSTR_STATE_COMPLETE = 'complete'
+_FLD_RGSTR_STATE_ROLLBACK = 'rollback'
 
 # see https://www.arangodb.com/2018/07/time-traveling-with-graph-databases/
 # in unix epoch ms this is 2255/6/5
@@ -66,6 +67,15 @@ class ArangoBatchTimeTravellingDBFactory:
         Returns the name of the registry collection.
         """
         return self._registry_collection.name
+
+    def get_registered_loads(self, load_namespace):
+        """
+        Returns all the registered loads for a namespace sorted by load timestamp from newest to
+        oldest.
+
+        load_namespace - the namespace of the loads to return.
+        """
+        return _get_registered_loads(self._database, self._registry_collection, load_namespace)
 
     def get_instance(
             self,
@@ -205,6 +215,7 @@ class ArangoBatchTimeTravellingDB:
     def register_load_start(self, load_namespace, load_version, timestamp, current_time):
         """
         Register that a load is starting in the database.
+
         load_namespace - the unique namespace of the data set, e.g. NCBI_TAXA, GENE_ONTOLOGY,
           ENVO, etc.
         load_version - the version of the load that is unique within the namespace.
@@ -235,6 +246,7 @@ class ArangoBatchTimeTravellingDB:
     def register_load_complete(self, load_namespace, load_version, current_time):
         """
         Register that a load has completed in the database.
+
         load_namespace - the unique namespace of the data set, e.g. NCBI_TAXA, GENE_ONTOLOGY,
           ENVO, etc.
         load_version - the version of the load that is unique within the namespace.
@@ -252,6 +264,28 @@ class ArangoBatchTimeTravellingDB:
         except _AQLQueryExecuteError as e:
             if e.error_code == 1202:
                 raise ValueError('Load is not registered, cannot be completed')
+            raise e
+
+    def register_load_rollback(self, load_namespace, load_version):
+        """
+        Register that a load is in the process of being rolled back.
+
+        load_namespace - the unique namespace of the data set, e.g. NCBI_TAXA, GENE_ONTOLOGY,
+          ENVO, etc.
+        load_version - the version of the load that is unique within the namespace.
+        """
+        doc = {_FLD_KEY: load_namespace + '_' + load_version,
+               _FLD_RGSTR_STATE: _FLD_RGSTR_STATE_ROLLBACK}
+        
+        try:
+            self._database.aql.execute(
+                f'UPDATE @d in @@col',
+                bind_vars={'d': doc, '@col': self._registry_collection.name}
+            )
+        # could combine some of this code with the above method... meh
+        except _AQLQueryExecuteError as e:
+            if e.error_code == 1202:
+                raise ValueError('Load is not registered, cannot be rolled back')
             raise e
 
     def get_registered_loads(self, load_namespace):
