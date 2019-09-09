@@ -86,7 +86,7 @@ class ArangoBatchTimeTravellingDBFactory:
         """
         Get a database instance configured with the given collections.
 
-        The collections are checked for exitence, type, and required indexes, which can be
+        The collections are checked for existence, type, and required indexes, which can be
         expensive.
 
         vertex_collection - the name of the collection to use for vertex operations.
@@ -123,7 +123,7 @@ class ArangoBatchTimeTravellingDB:
         """
         Create the DB interface.
 
-        The collections are checked for exitence, type, and required indexes, which can be
+        The collections are checked for existence, type, and required indexes, which can be
         expensive.
 
         database - the python_arango ArangoDB database containing the data to query or modify.
