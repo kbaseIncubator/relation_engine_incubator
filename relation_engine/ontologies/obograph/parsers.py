@@ -84,30 +84,32 @@ class OBOGraphLoader:
         if unknown_types:
             raise ValueError(f'Found unprocessable node types {unknown_types}')
         self._ont_prefix = ontology_id_prefix
-        self._property_map = self._get_property_map()
+        self._property_map = self._get_property_map(obo)
         
-    def _get_property_map(self):
+    def _get_property_map(self, obo):
         ret = {}
-        for n in self._obo[_OBO_NODES]:
-            # For ENVO, all the nodes without types are property types, so we include them in the
-            # property map. I really hope this holds for other ontologies
-            # may need to add a flag
-            if not n.get(_OBO_TYPE) or n[_OBO_TYPE] == _OBO_TYPE_PROPERTY:
-                if _OBO_LABEL in n:
-                    ret[n[_OBO_ID]] = n[_OBO_LABEL]
-                elif _OBO_META in n and _OBO_BASIC_PROPS in n[_OBO_META]:
-                    comments = []
-                    for p in n[_OBO_META][_OBO_BASIC_PROPS]:
-                        if self._strip_url(p[_OBO_PREDICATE]) == _OBO_COMMENT:
-                            comments.append(p[_OBO_VALUE])
-                    if len(comments) != 1:
-                        raise ValueError(f'Property node {n[_OBO_ID]} has no {_OBO_LABEL} field' +
-                            f'and {len(comments)} comments in {_OBO_META}/{_OBO_BASIC_PROPS}')
+        for g in obo[_OBO_GRAPHS]:
+            for n in g[_OBO_NODES]:
+                # For ENVO, all the nodes without types are property types, so we include
+                # them in the property map. I really hope this holds for other ontologies
+                # may need to add a flag
+                if not n.get(_OBO_TYPE) or n[_OBO_TYPE] == _OBO_TYPE_PROPERTY:
+                    if _OBO_LABEL in n:
+                        ret[n[_OBO_ID]] = n[_OBO_LABEL]
+                    elif _OBO_META in n and _OBO_BASIC_PROPS in n[_OBO_META]:
+                        comments = []
+                        for p in n[_OBO_META][_OBO_BASIC_PROPS]:
+                            if self._strip_url(p[_OBO_PREDICATE]) == _OBO_COMMENT:
+                                comments.append(p[_OBO_VALUE])
+                        if len(comments) != 1:
+                            raise ValueError(
+                                f'Property node {n[_OBO_ID]} has no {_OBO_LABEL} field' +
+                                f'and {len(comments)} comments in {_OBO_META}/{_OBO_BASIC_PROPS}')
+                        else:
+                            ret[n[_OBO_ID]] = comments[0]
                     else:
-                        ret[n[_OBO_ID]] = comments[0]
-                else:
-                    raise ValueError(f'Property node {n[_OBO_ID]} has no {_OBO_LABEL} ' +
-                        f'and no {_OBO_META}/{_OBO_BASIC_PROPS} fields') 
+                        raise ValueError(f'Property node {n[_OBO_ID]} has no {_OBO_LABEL} ' +
+                            f'and no {_OBO_META}/{_OBO_BASIC_PROPS} fields') 
         return ret
 
     def _get_graph(self, obo, graph_id):
