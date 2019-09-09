@@ -38,7 +38,7 @@ The most recent load will be removed.
     parser.add_argument(
         '--load-namespace',
         required=True,
-        help='the name of the data that is being rollec back, e.g. envo, gene_ontology, etc. ' +
+        help='the name of the data that is being rolled back, e.g. envo, gene_ontology, etc. ' +
             'Must be unique across all load sources and consistent across loads.')
     parser.add_argument(
         '--load-registry-collection',
