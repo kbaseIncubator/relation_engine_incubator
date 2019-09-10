@@ -75,6 +75,12 @@ changes between the prior load and the current load, and retaining the prior loa
              'or edges created in this load will start to exist with this time stamp. ' +
              'NOTE: the user is responsible for ensuring this timestamp is greater than any ' +
              'other timestamps previously used to load data into the NCBI taxonomy DB.')
+    parser.add_argument(
+        '--release-timestamp',
+        type=int,
+        required=True,
+        help='the timestamp, in unix epoch milliseconds, when the data was released ' +
+            'at the source.')
 
     return parser.parse_args()
 
@@ -108,7 +114,7 @@ def main():
         merge = NCBIMergeProvider(merge)
 
         load_graph_delta(_LOAD_NAMESPACE, nodeprov, edgeprov, attdb,
-            a.load_timestamp, a.load_version, merge_source=merge)
+            a.load_timestamp, a.release_timestamp, a.load_version, merge_source=merge)
 
 if __name__  == '__main__':
     main()

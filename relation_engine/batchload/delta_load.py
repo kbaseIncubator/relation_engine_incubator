@@ -29,6 +29,7 @@ def load_graph_delta(
         edge_source,
         database,
         timestamp,
+        release_timestamp,
         load_version,
         merge_source=None,
         batch_size=10000):
@@ -51,6 +52,8 @@ def load_graph_delta(
       edges.
     timestamp - the timestamp, in Unix epoch milliseconds, when the load should be considered as
       active.
+    release_timestamp - the timestamp, in Unix epoch milliseconds, when the load was released
+      at the data source.
     load_version - a unique ID for this load - often the date of the data release.
     merge_source - an iterator that produces edges as dicts that represent merges of vertices.
          An 'id' field is required that uniquely identifies the edge in this load (and any previous
@@ -65,7 +68,8 @@ def load_graph_delta(
     if merge_source and not db.get_merge_collection():
         raise ValueError('A merge source is specified but the database ' +
            'has no merge collection')
-    db.register_load_start(load_namespace, load_version, timestamp, _get_current_timestamp())
+    db.register_load_start(
+        load_namespace, load_version, timestamp, release_timestamp, _get_current_timestamp())
 
     _process_verts(db, vertex_source, timestamp, load_version, batch_size)
     if merge_source:
@@ -275,6 +279,7 @@ def roll_back_last_load(database, load_namespace):
 
     for c in collections:
         db.delete_created_documents(c, timestamp)
+        # TODO NOW pass release timestamp 
         db.undo_expire_documents(c, timestamp - 1)
         db.reset_last_version(c, current_ver, prior_ver)
     

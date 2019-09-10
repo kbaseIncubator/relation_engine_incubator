@@ -28,10 +28,13 @@ _FLD_VER_LST = 'last_version'
 _FLD_VER_FST = 'first_version'
 _FLD_CREATED = 'created'
 _FLD_EXPIRED = 'expired'
+_FLD_RELEASE_CREATED = 'release_created'
+_FLD_RELEASE_EXPIRED = 'release_expired'
 
 _FLD_RGSTR_LOAD_NAMESPACE = 'load_namespace'
 _FLD_RGSTR_LOAD_VERSION = 'load_version'
 _FLD_RGSTR_LOAD_TIMESTAMP = 'load_timestamp'
+_FLD_RGSTR_LOAD_RELEASE_TIMESTAMP = 'release_timestamp'
 _FLD_RGSTR_VERTEX_COLLECTION = 'vertex_collection'
 _FLD_RGSTR_MERGE_COLLECTION = 'merge_collection'
 _FLD_RGSTR_EDGE_COLLECTIONS = 'edge_collections'
@@ -212,7 +215,13 @@ class ArangoBatchTimeTravellingDB:
         """
         return self._registry_collection.name
 
-    def register_load_start(self, load_namespace, load_version, timestamp, current_time):
+    def register_load_start(
+            self,
+            load_namespace,
+            load_version,
+            timestamp,
+            release_timestamp,
+            current_time):
         """
         Register that a load is starting in the database.
 
@@ -220,6 +229,8 @@ class ArangoBatchTimeTravellingDB:
           ENVO, etc.
         load_version - the version of the load that is unique within the namespace.
         timestamp - the timestamp in unix epoch milliseconds when the load will become active.
+        release_timestamp - the timestamp in unix epoch milliseconds when the data was released
+          at the source.
         current_time - the current time in unix epoch milliseconds.
         """
         doc = {_FLD_KEY: load_namespace + '_' + load_version,
@@ -227,6 +238,7 @@ class ArangoBatchTimeTravellingDB:
                _FLD_RGSTR_LOAD_NAMESPACE: load_namespace,
                _FLD_RGSTR_LOAD_VERSION: load_version,
                _FLD_RGSTR_LOAD_TIMESTAMP: timestamp,
+               _FLD_RGSTR_LOAD_RELEASE_TIMESTAMP: release_timestamp,
                _FLD_RGSTR_COMPLETE_TIME: None,
                _FLD_RGSTR_STATE: _FLD_RGSTR_STATE_IN_PROGRESS,
                _FLD_RGSTR_VERTEX_COLLECTION: self._vertex_collection.name,
@@ -399,9 +411,10 @@ class ArangoBatchTimeTravellingDB:
           as the expiration date.
         version - the version required for the last version field for a vertex to avoid expiration.
         """
+        # TODO NOW pass release timestamp
         col = self._vertex_collection
         self._expire_extant_document_without_last_version(timestamp, version, col)
-        
+
     # may need to separate timestamp into find and expire timestamps, but YAGNI for now
     def expire_extant_edges_without_last_version(
             self,
@@ -418,6 +431,7 @@ class ArangoBatchTimeTravellingDB:
         edge_collection - the collection name to query. If none is provided, the default will
           be used.
         """
+        # TODO NOW pass release timestamp
         col = self._get_edge_collection(edge_collection)
         self._expire_extant_document_without_last_version(timestamp, version, col)
     
@@ -459,6 +473,7 @@ class ArangoBatchTimeTravellingDB:
         expire_time - the time of expiration, in unix epoch milliseconds, of the documents to
           un-expire.
         """
+        # TODO NOW pass release timestamp
         col = self._get_collection(collection) # ensure collection exists
         self._database.aql.execute(
             f"""
@@ -574,6 +589,7 @@ class BatchUpdater:
 
         Returns the key for the vertex.
         """
+        # TODO NOW pass release timestamp
         self._ensure_vertex()
         vert = _create_vertex(data, id_, version, created_time)
         self._updates.append(vert)
@@ -600,6 +616,7 @@ class BatchUpdater:
 
         Returns the key for the edge.
         """
+        # TODO NOW pass release timestamp
         self._ensure_edge()
         edge = _create_edge(id_, from_vertex, to_vertex, version, created_time, data)
         self._updates.append(edge)
@@ -641,6 +658,7 @@ class BatchUpdater:
         expiration_time - the time, in Unix epoch milliseconds, to set as the expiration time
           on the vertex.
         """
+        # TODO NOW pass release timestamp
         self._ensure_vertex()
         self._updates.append({_FLD_KEY: key, _FLD_EXPIRED: expiration_time})
 
@@ -652,6 +670,7 @@ class BatchUpdater:
         expiration_time - the time, in Unix epoch milliseconds, to set as the expiration time
           on the edge.
         """
+        # TODO NOW pass release timestamp
         self._update_edge(edge, {_FLD_EXPIRED: expiration_time})
 
     def update(self):
