@@ -389,111 +389,6 @@ class ArangoBatchTimeTravellingDB:
         col_name = self._get_edge_collection(edge_collection).name
         return self._get_documents(ids, timestamp, col_name)
 
-    def save_vertex(self, id_, version, created_time, data):
-        """
-        Save a vertex in the database.
-
-        Note that only a shallow copy of the data is made before adding database fields. Modifying
-        embedded data structures may have unexpected results.
-
-        The _key field is generated from the id_ and version fields, which are expected to uniquely
-        identify a vertex.
-
-        id_ - the external ID of the vertex.
-        version - the version of the load as part of which the vertex is being created.
-        created_time - the time at which the vertex should begin to exist in Unix epoch
-          milliseconds.
-        data - the vertex contents as a dict.
-
-        Returns the key for the vertex.
-        """
-
-        data = _create_vertex(data, id_, version, created_time)
-        self._vertex_collection.insert(data, silent=True)
-        return data[_FLD_KEY]
-
-    def save_edge(
-            self,
-            id_,
-            from_vertex,
-            to_vertex,
-            version,
-            created_time,
-            data=None,
-            edge_collection=None):
-        """
-        Save an edge in the database.
-
-        Note that only a shallow copy of the data is made before adding database fields. Modifying
-        embedded data structures may have unexpected results.
-
-        The _key field is generated from the id_ and version fields, which are expected to uniquely
-        identify an edge.
-
-        id_ - the external ID of the edge.
-        from_vertex - the vertex where the edge originates. This vertex must have been fetched from
-          the database.
-        to_vertex - the vertex where the edge terminates. This vertex must have been fetched from
-          the database.
-        version - the version of the load as part of which the edge is being created.
-        created_time - the time at which the edge should begin to exist in Unix epoch milliseconds.
-        data - the edge contents as a dict.
-        edge_collection - the name of the collection to modify. If none is provided, the default
-          will be used.
-
-        Returns the key for the edge.
-        """
-        data = _create_edge(id_, from_vertex, to_vertex, version, created_time, data)
-        col = self._get_edge_collection(edge_collection)
-        col.insert(data, silent=True)
-        return data[_FLD_KEY]
-
-    def set_last_version_on_vertex(self, key, last_version):
-        """
-        Set the last version field on a vertex.
-
-        key - the key of the vertex.
-        last_version - the version to set.
-        """
-        self._vertex_collection.update({_FLD_KEY: key, _FLD_VER_LST: last_version}, silent=True)
-
-    def set_last_version_on_edge(self, key, last_version, edge_collection=None):
-        """
-        Set the last version field on a edge.
-
-        key - the key of the edge.
-        last_version - the version to set.
-        edge_collection - the collection name to query. If none is provided, the default will
-          be used.
-        """
-        col = self._get_edge_collection(edge_collection)
-
-        col.update({_FLD_KEY: key, _FLD_VER_LST: last_version}, silent=True)
-
-    def expire_vertex(self, key, expiration_time):
-        """
-        Sets the expiration time on a vertex.
-
-        key - the vertex key.
-        expiration_time - the time, in Unix epoch milliseconds, to set as the expiration time
-          on the vertex.
-        """
-        self._vertex_collection.update({_FLD_KEY: key, _FLD_EXPIRED: expiration_time}, silent=True)
-
-    def expire_edge(self, key, expiration_time, edge_collection=None):
-        """
-        Sets the expiration time on an edge in the given collections.
-
-        key - the edge key.
-        expiration_time - the time, in Unix epoch milliseconds, to set as the expiration time
-          on the edge.
-        edge_collection - the collection name to query. If none is provided, the default will
-          be used.
-
-        """
-        col = self._get_edge_collection(edge_collection)
-        col.update({_FLD_KEY: key, _FLD_EXPIRED: expiration_time}, silent=True)
-
     # may need to separate timestamp into find and expire timestamps, but YAGNI for now
     def expire_extant_vertices_without_last_version(self, timestamp, version):
         """
@@ -506,7 +401,7 @@ class ArangoBatchTimeTravellingDB:
         """
         col = self._vertex_collection
         self._expire_extant_document_without_last_version(timestamp, version, col)
-
+        
     # may need to separate timestamp into find and expire timestamps, but YAGNI for now
     def expire_extant_edges_without_last_version(
             self,
