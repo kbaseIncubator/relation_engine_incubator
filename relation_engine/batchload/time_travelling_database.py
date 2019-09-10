@@ -571,7 +571,7 @@ class BatchUpdater:
         """
         return self._col.name
 
-    def create_vertex(self, id_, version, created_time, data):
+    def create_vertex(self, id_, version, created_time, release_time, data):
         """
         Save a vertex in the database.
 
@@ -585,17 +585,26 @@ class BatchUpdater:
         version - the version of the load as part of which the vertex is being created.
         created_time - the time at which the vertex should begin to exist in Unix epoch
           milliseconds.
+        release_time - the time at which the vertex was released at the data source in Unix epoch
+          milliseconds.
         data - the vertex contents as a dict.
 
         Returns the key for the vertex.
         """
-        # TODO NOW pass release timestamp
         self._ensure_vertex()
-        vert = _create_vertex(data, id_, version, created_time)
+        vert = _create_vertex(data, id_, version, created_time, release_time)
         self._updates.append(vert)
         return vert[_FLD_KEY]
 
-    def create_edge(self, id_, from_vertex, to_vertex, version, created_time, data=None):
+    def create_edge(
+            self,
+            id_,
+            from_vertex,
+            to_vertex,
+            version,
+            created_time,
+            release_time,
+            data=None):
         """
         Save an edge in the database.
 
@@ -612,13 +621,14 @@ class BatchUpdater:
           the database.
         version - the version of the load as part of which the edge is being created.
         created_time - the time at which the edge should begin to exist in Unix epoch milliseconds.
+        release_time - the time at which the edge was released at the data source in Unix epoch
+          milliseconds.
         data - the edge contents as a dict.
 
         Returns the key for the edge.
         """
-        # TODO NOW pass release timestamp
         self._ensure_edge()
-        edge = _create_edge(id_, from_vertex, to_vertex, version, created_time, data)
+        edge = _create_edge(id_, from_vertex, to_vertex, version, created_time, release_time, data)
         self._updates.append(edge)
         return edge[_FLD_KEY]
 
@@ -694,7 +704,7 @@ class BatchUpdater:
         if not self.is_edge:
             raise ValueError('Batch updater is configured for a vertex collection')
 
-def _create_vertex(data, id_, version, created_time):
+def _create_vertex(data, id_, version, created_time, release_time):
     data = dict(data) # make a copy and overwrite the old data variable
     data[_FLD_KEY] = id_ + '_' + version
     data[_FLD_ID] = id_
@@ -702,6 +712,8 @@ def _create_vertex(data, id_, version, created_time):
     data[_FLD_VER_LST] = version
     data[_FLD_CREATED] = created_time
     data[_FLD_EXPIRED] = _MAX_ADB_INTEGER
+    data[_FLD_RELEASE_CREATED] = release_time
+    data[_FLD_RELEASE_EXPIRED] = _MAX_ADB_INTEGER
 
     return data
 
@@ -711,6 +723,7 @@ def _create_edge(
         to_vertex,
         version,
         created_time,
+        release_time,
         data):
     data = {} if not data else data
 
@@ -725,6 +738,8 @@ def _create_edge(
     data[_FLD_VER_LST] = version
     data[_FLD_CREATED] = created_time
     data[_FLD_EXPIRED] = _MAX_ADB_INTEGER
+    data[_FLD_RELEASE_CREATED] = release_time
+    data[_FLD_RELEASE_EXPIRED] = _MAX_ADB_INTEGER
     return data
 
 # if an edge is inserted into a non-edge collection _from and _to are silently dropped

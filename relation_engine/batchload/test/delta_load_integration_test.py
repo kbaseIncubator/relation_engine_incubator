@@ -78,7 +78,7 @@ def _load_no_merge_source(arango_db, batchsize):
          {'id': 'expire', 'data': 'foo'},     # expired nodes shouldn't be touched
          {'id': 'gap', 'data': 'super sweet'}, # even if reintroduced later
         ],
-        100, 300, 'v0')
+        100, 300, 99, 299, 'v0')
 
     # there are 2 update and 2 same nodes for the purposes of testing edge updates correctly
     _import_bulk(
@@ -90,7 +90,7 @@ def _load_no_merge_source(arango_db, batchsize):
          {'id': 'up1', 'data': {'old': 'data'}},  # will be updated
          {'id': 'up2', 'data': ['old', 'data']}   # will be updated
         ],
-        100, ADB_MAX_TIME, 'v0', 'v1')
+        100, ADB_MAX_TIME, 99, ADB_MAX_TIME, 'v0', 'v1')
 
     _import_bulk(
         def_ecol,
@@ -98,7 +98,7 @@ def _load_no_merge_source(arango_db, batchsize):
          {'id': 'expire', 'from': 'expire', 'to': 'same2', 'data': 'foo'},  # shouldn't be touched
          {'id': 'gap', 'from': 'gap', 'to': 'same1', 'data': 'bar'}         # ditto
         ],
-        100, 300, 'v0', vert_col_name=vcol.name)
+        100, 300, 99, 299, 'v0', vert_col_name=vcol.name)
 
     _import_bulk(
         def_ecol,
@@ -106,7 +106,7 @@ def _load_no_merge_source(arango_db, batchsize):
          {'id': 'old', 'from': 'old', 'to': 'up1', 'data': 'foo'},  # will be deleted
          {'id': 'up1', 'from': 'same1', 'to': 'up1', 'data': 'bar'} # will be updated to new up1
         ],
-        100, ADB_MAX_TIME, 'v0', 'v1', vert_col_name=vcol.name)
+        100, ADB_MAX_TIME, 99, ADB_MAX_TIME, 'v0', 'v1', vert_col_name=vcol.name)
 
     _import_bulk(
         e1col,
@@ -114,7 +114,7 @@ def _load_no_merge_source(arango_db, batchsize):
          {'id': 'old', 'from': 'old', 'to': 'same1', 'data': 'baz'},    # will be deleted
          {'id': 'same', 'from': 'same1', 'to': 'same2', 'data': 'bing'} # no change
         ],
-        100, ADB_MAX_TIME, 'v0', 'v1', vert_col_name=vcol.name)
+        100, ADB_MAX_TIME, 99, ADB_MAX_TIME, 'v0', 'v1', vert_col_name=vcol.name)
 
     _import_bulk(
         e2col,
@@ -122,7 +122,7 @@ def _load_no_merge_source(arango_db, batchsize):
          {'id': 'change', 'from': 'same1', 'to': 'same2', 'data': 'baz'}, # will be updated
          {'id': 'up2', 'from': 'up2', 'to': 'same2', 'data': 'boof'}      # will be updated to up2
         ],
-        100, ADB_MAX_TIME, 'v0', 'v1', vert_col_name=vcol.name)
+        100, ADB_MAX_TIME, 99, ADB_MAX_TIME, 'v0', 'v1', vert_col_name=vcol.name)
 
     vsource = [
         {'id': 'same1', 'data': {'bar': 'baz'}}, # will not change
@@ -156,34 +156,34 @@ def _load_no_merge_source(arango_db, batchsize):
     vexpected = [
         {'id': 'expire', '_key': 'expire_v0', '_id': 'v/expire_v0',
          'first_version': 'v0', 'last_version': 'v0', 'created': 100, 'expired': 300,
-         'data': 'foo'},
+         'release_created': 99, 'release_expired': 299, 'data': 'foo'},
         {'id': 'gap', '_key': 'gap_v0', '_id': 'v/gap_v0',
          'first_version': 'v0', 'last_version': 'v0', 'created': 100, 'expired': 300,
-         'data': 'super sweet'},
+         'release_created': 99, 'release_expired': 299, 'data': 'super sweet'},
         {'id': 'gap', '_key': 'gap_v2', '_id': 'v/gap_v2',
          'first_version': 'v2', 'last_version': 'v2', 'created': 500, 'expired': ADB_MAX_TIME,
-         'data': 'super sweet'},
+         'release_created': 400, 'release_expired': ADB_MAX_TIME, 'data': 'super sweet'},
         {'id': 'old', '_key': 'old_v0', '_id': 'v/old_v0',
          'first_version': 'v0', 'last_version': 'v1', 'created': 100, 'expired': 499,
-         'data': 'foo'},
+         'release_created': 99, 'release_expired': ADB_MAX_TIME, 'data': 'foo'},
         {'id': 'same1', '_key': 'same1_v0', '_id': 'v/same1_v0',
          'first_version': 'v0', 'last_version': 'v2', 'created': 100, 'expired': ADB_MAX_TIME,
-         'data': {'bar': 'baz'}},
+         'release_created': 99, 'release_expired': ADB_MAX_TIME, 'data': {'bar': 'baz'}},
         {'id': 'same2', '_key': 'same2_v0', '_id': 'v/same2_v0',
          'first_version': 'v0', 'last_version': 'v2', 'created': 100, 'expired': ADB_MAX_TIME,
-         'data': ['bar', 'baz']},
+         'release_created': 99, 'release_expired': ADB_MAX_TIME, 'data': ['bar', 'baz']},
         {'id': 'up1', '_key': 'up1_v0', '_id': 'v/up1_v0',
          'first_version': 'v0', 'last_version': 'v1', 'created': 100, 'expired': 499,
-         'data': {'old': 'data'}},
+         'release_created': 99, 'release_expired': ADB_MAX_TIME, 'data': {'old': 'data'}},
         {'id': 'up1', '_key': 'up1_v2', '_id': 'v/up1_v2',
          'first_version': 'v2', 'last_version': 'v2', 'created': 500, 'expired': ADB_MAX_TIME,
-         'data': {'new': 'data'}},
+         'release_created': 400, 'release_expired': ADB_MAX_TIME, 'data': {'new': 'data'}},
         {'id': 'up2', '_key': 'up2_v0', '_id': 'v/up2_v0',
          'first_version': 'v0', 'last_version': 'v1', 'created': 100, 'expired': 499,
-         'data': ['old', 'data']},
+         'release_created': 99, 'release_expired': ADB_MAX_TIME, 'data': ['old', 'data']},
         {'id': 'up2', '_key': 'up2_v2', '_id': 'v/up2_v2',
          'first_version': 'v2', 'last_version': 'v2', 'created': 500, 'expired': ADB_MAX_TIME,
-         'data': ['old', 'data1']},
+         'release_created': 400, 'release_expired': ADB_MAX_TIME, 'data': ['old', 'data1']},
     ]
 
     check_docs(arango_db, vexpected, 'v')
@@ -192,27 +192,27 @@ def _load_no_merge_source(arango_db, batchsize):
         {'id': 'expire', 'from': 'expire', 'to': 'same2',
          '_key': 'expire_v0', '_id': 'def_e/expire_v0', '_from': 'v/expire_v0', '_to': 'v/same2_v0',
          'first_version': 'v0', 'last_version': 'v0', 'created': 100, 'expired': 300,
-         'data': 'foo'},
+         'release_created': 99, 'release_expired': 299, 'data': 'foo'},
         {'id': 'gap', 'from': 'gap', 'to': 'same1',
          '_key': 'gap_v0', '_id': 'def_e/gap_v0', '_from': 'v/gap_v0', '_to': 'v/same1_v0',
          'first_version': 'v0', 'last_version': 'v0', 'created': 100, 'expired': 300,
-         'data': 'bar'},
+         'release_created': 99, 'release_expired': 299, 'data': 'bar'},
         {'id': 'gap', 'from': 'gap', 'to': 'same1',
          '_key': 'gap_v2', '_id': 'def_e/gap_v2', '_from': 'v/gap_v2', '_to': 'v/same1_v0',
          'first_version': 'v2', 'last_version': 'v2', 'created': 500, 'expired': ADB_MAX_TIME,
-         'data': 'bar'},
+         'release_created': 400, 'release_expired': ADB_MAX_TIME, 'data': 'bar'},
         {'id': 'old', 'from': 'old', 'to': 'up1',
          '_key': 'old_v0', '_id': 'def_e/old_v0', '_from': 'v/old_v0', '_to': 'v/up1_v0',
          'first_version': 'v0', 'last_version': 'v1', 'created': 100, 'expired': 499,
-         'data': 'foo'},
+         'release_created': 99, 'release_expired': ADB_MAX_TIME, 'data': 'foo'},
         {'id': 'up1', 'from': 'same1', 'to': 'up1',
          '_key': 'up1_v0', '_id': 'def_e/up1_v0', '_from': 'v/same1_v0', '_to': 'v/up1_v0',
          'first_version': 'v0', 'last_version': 'v1', 'created': 100, 'expired': 499,
-         'data': 'bar'},
+         'release_created': 99, 'release_expired': ADB_MAX_TIME, 'data': 'bar'},
         {'id': 'up1', 'from': 'same1', 'to': 'up1',
          '_key': 'up1_v2', '_id': 'def_e/up1_v2', '_from': 'v/same1_v0', '_to': 'v/up1_v2',
          'first_version': 'v2', 'last_version': 'v2', 'created': 500, 'expired': ADB_MAX_TIME,
-         'data': 'bar'},
+         'release_created': 400, 'release_expired': ADB_MAX_TIME, 'data': 'bar'},
     ]
 
     check_docs(arango_db, def_e_expected, 'def_e')
@@ -221,11 +221,11 @@ def _load_no_merge_source(arango_db, batchsize):
         {'id': 'old', 'from': 'old', 'to': 'same1',
          '_key': 'old_v0', '_id': 'e1/old_v0', '_from': 'v/old_v0', '_to': 'v/same1_v0',
          'first_version': 'v0', 'last_version': 'v1', 'created': 100, 'expired': 499,
-         'data': 'baz'},
+         'release_created': 99, 'release_expired': ADB_MAX_TIME, 'data': 'baz'},
         {'id': 'same', 'from': 'same1', 'to': 'same2',
          '_key': 'same_v0', '_id': 'e1/same_v0', '_from': 'v/same1_v0', '_to': 'v/same2_v0',
          'first_version': 'v0', 'last_version': 'v2', 'created': 100, 'expired': ADB_MAX_TIME,
-         'data': 'bing'},
+         'release_created': 99, 'release_expired': ADB_MAX_TIME, 'data': 'bing'},
     ]
 
     check_docs(arango_db, e1_expected, 'e1')
@@ -234,19 +234,19 @@ def _load_no_merge_source(arango_db, batchsize):
         {'id': 'change', 'from': 'same1', 'to': 'same2',
          '_key': 'change_v0', '_id': 'e2/change_v0', '_from': 'v/same1_v0', '_to': 'v/same2_v0',
          'first_version': 'v0', 'last_version': 'v1', 'created': 100, 'expired': 499,
-         'data': 'baz'},
+         'release_created': 99, 'release_expired': ADB_MAX_TIME, 'data': 'baz'},
         {'id': 'change', 'from': 'same1', 'to': 'same2',
          '_key': 'change_v2', '_id': 'e2/change_v2', '_from': 'v/same1_v0', '_to': 'v/same2_v0',
          'first_version': 'v2', 'last_version': 'v2', 'created': 500, 'expired': ADB_MAX_TIME,
-         'data': 'boo'},
+         'release_created': 400, 'release_expired': ADB_MAX_TIME, 'data': 'boo'},
         {'id': 'up2', 'from': 'up2', 'to': 'same2',
          '_key': 'up2_v0', '_id': 'e2/up2_v0', '_from': 'v/up2_v0', '_to': 'v/same2_v0',
          'first_version': 'v0', 'last_version': 'v1', 'created': 100, 'expired': 499,
-         'data': 'boof'},
+         'release_created': 99, 'release_expired': ADB_MAX_TIME, 'data': 'boof'},
         {'id': 'up2', 'from': 'up2', 'to': 'same2',
          '_key': 'up2_v2', '_id': 'e2/up2_v2', '_from': 'v/up2_v2', '_to': 'v/same2_v0',
          'first_version': 'v2', 'last_version': 'v2', 'created': 500, 'expired': ADB_MAX_TIME,
-         'data': 'boof'},
+         'release_created': 400, 'release_expired': ADB_MAX_TIME, 'data': 'boof'},
     ]
 
     check_docs(arango_db, e2_expected, 'e2')
@@ -286,7 +286,7 @@ def test_merge_edges(arango_db):
          {'id': 'merged', 'data': 'bar'}, # will be merged
          {'id': 'target', 'data': 'baz'}, # will not change
         ],
-        100, ADB_MAX_TIME, 'v1')
+        100, ADB_MAX_TIME, 99, ADB_MAX_TIME, 'v1')
     
     _import_bulk(
         ecol,
@@ -294,7 +294,7 @@ def test_merge_edges(arango_db):
          {'id': 'to_m', 'from': 'root', 'to': 'merged', 'data': 'foo'}, # will be deleted
          {'id': 'to_t', 'from': 'root', 'to': 'target', 'data': 'bar'}  # shouldn't be touched
         ],
-        100, ADB_MAX_TIME, 'v1', vert_col_name=vcol.name)
+        100, ADB_MAX_TIME, 99, ADB_MAX_TIME, 'v1', vert_col_name=vcol.name)
 
     vsource = [
         {'id': 'root', 'data': 'foo'},   # will not change
@@ -319,13 +319,13 @@ def test_merge_edges(arango_db):
     vexpected = [
         {'id': 'root', '_key': 'root_v1', '_id': 'v/root_v1',
          'first_version': 'v1', 'last_version': 'v2', 'created': 100, 'expired': ADB_MAX_TIME,
-         'data': 'foo'},
+         'release_created': 99, 'release_expired': ADB_MAX_TIME, 'data': 'foo'},
         {'id': 'merged', '_key': 'merged_v1', '_id': 'v/merged_v1',
          'first_version': 'v1', 'last_version': 'v1', 'created': 100, 'expired': 499,
-         'data': 'bar'},
+         'release_created': 99, 'release_expired': ADB_MAX_TIME, 'data': 'bar'},
         {'id': 'target', '_key': 'target_v1', '_id': 'v/target_v1',
          'first_version': 'v1', 'last_version': 'v2', 'created': 100, 'expired': ADB_MAX_TIME,
-         'data': 'baz'},
+         'release_created': 99, 'release_expired': ADB_MAX_TIME, 'data': 'baz'},
     ]
 
     check_docs(arango_db, vexpected, 'v')
@@ -334,11 +334,11 @@ def test_merge_edges(arango_db):
         {'id': 'to_m', 'from': 'root', 'to': 'merged',
          '_key': 'to_m_v1', '_id': 'e/to_m_v1', '_from': 'v/root_v1', '_to': 'v/merged_v1',
          'first_version': 'v1', 'last_version': 'v1', 'created': 100, 'expired': 499,
-         'data': 'foo'},
+         'release_created': 99, 'release_expired': ADB_MAX_TIME, 'data': 'foo'},
         {'id': 'to_t', 'from': 'root', 'to': 'target',
          '_key': 'to_t_v1', '_id': 'e/to_t_v1', '_from': 'v/root_v1', '_to': 'v/target_v1',
          'first_version': 'v1', 'last_version': 'v2', 'created': 100, 'expired': ADB_MAX_TIME,
-         'data': 'bar'},
+         'release_created': 99, 'release_expired': ADB_MAX_TIME, 'data': 'bar'},
     ]
 
     check_docs(arango_db, e_expected, 'e')
@@ -347,7 +347,7 @@ def test_merge_edges(arango_db):
         {'id': 'm_to_t', 'from': 'merged', 'to': 'target',
          '_key': 'm_to_t_v2', '_id': 'm/m_to_t_v2', '_from': 'v/merged_v1', '_to': 'v/target_v1',
          'first_version': 'v2', 'last_version': 'v2', 'created': 500, 'expired': ADB_MAX_TIME,
-         'data': 'woo'},
+         'release_created': 400, 'release_expired': ADB_MAX_TIME, 'data': 'woo'},
     ]
 
     check_docs(arango_db, m_expected, 'm')
@@ -402,23 +402,26 @@ def test_rollback_with_merge_collection(arango_db):
 
     m = ADB_MAX_TIME
 
-    _import_v(vcol, {'id': '1', 'k': '1'}, 0, m, 'v1', 'v2')
-    _import_v(vcol, {'id': '2', 'k': '2'}, 300, m, 'v2', 'v2')
-    _import_v(vcol, {'id': '3', 'k': '3'}, 0, 299, 'v1', 'v1')
-    _import_v(vcol, {'id': '3', 'k': '3'}, 300, m, 'v2', 'v2')
-    _import_v(vcol, {'id': '4', 'k': '4'}, 0, 299, 'v1', 'v1')
+    _import_v(vcol, {'id': '1', 'k': '1'}, 0, m, 0, m, 'v1', 'v2')
+    _import_v(vcol, {'id': '2', 'k': '2'}, 300, m, 299, m, 'v2', 'v2')
+    _import_v(vcol, {'id': '3', 'k': '3'}, 0, 299, 0, 298, 'v1', 'v1')
+    _import_v(vcol, {'id': '3', 'k': '3'}, 300, m, 299, m, 'v2', 'v2')
+    _import_v(vcol, {'id': '4', 'k': '4'}, 0, 299, 0, 298, 'v1', 'v1')
 
-    _import_e(edcol, {'id': '1', 'to': '1', 'from': '1', 'k': '1'}, 0, m, 'v1', 'v2', 'f')
-    _import_e(edcol, {'id': '2', 'to': '2', 'from': '2', 'k': '2'}, 300, m, 'v2', 'v2', 'f')
+    _import_e(edcol, {'id': '1', 'to': '1', 'from': '1', 'k': '1'}, 0, m, 0, m, 'v1', 'v2', 'f')
+    _import_e(edcol, {'id': '2', 'to': '2', 'from': '2', 'k': '2'}, 300, m, 299, m,'v2', 'v2', 'f')
 
-    _import_e(e1col, {'id': '1', 'to': '1', 'from': '1', 'k': '1'}, 0, 299, 'v1', 'v1', 'f')
-    _import_e(e1col, {'id': '1', 'to': '1', 'from': '1', 'k': '1'}, 300, m, 'v2', 'v2', 'f')
+    _import_e(e1col, {'id': '1', 'to': '1', 'from': '1', 'k': '1'},
+        0, 299, 0, 298, 'v1', 'v1', 'f')
+    _import_e(e1col, {'id': '1', 'to': '1', 'from': '1', 'k': '1'},
+        300, m, 299, m, 'v2', 'v2', 'f')
 
-    _import_e(e2col, {'id': '1', 'to': '1', 'from': '1', 'k': '1'}, 0, 299, 'v1', 'v1', 'f')
+    _import_e(e2col, {'id': '1', 'to': '1', 'from': '1', 'k': '1'},
+        0, 299, 0, 298, 'v1', 'v1', 'f')
 
     # merge edges are never updated once created
-    _import_e(mcol, {'id': '1', 'to': '1', 'from': '1', 'k': '1'}, 0, m, 'v1', 'v1', 'f')
-    _import_e(mcol, {'id': '2', 'to': '2', 'from': '2', 'k': '2'}, 300, m, 'v2', 'v2', 'f')
+    _import_e(mcol, {'id': '1', 'to': '1', 'from': '1', 'k': '1'}, 0, m, 0, m, 'v1', 'v1', 'f')
+    _import_e(mcol, {'id': '2', 'to': '2', 'from': '2', 'k': '2'}, 300, m, 299, m, 'v2', 'v2', 'f')
 
     db = ArangoBatchTimeTravellingDB(arango_db, 'r', 'v', default_edge_collection='def_e',
         edge_collections=['e1', 'e2'], merge_collection='m')
@@ -435,13 +438,13 @@ def test_rollback_with_merge_collection(arango_db):
     vexpected = [
         {'id': '1', '_key': '1_v1', '_id': 'v/1_v1',
          'first_version': 'v1', 'last_version': 'v1', 'created': 0, 'expired': ADB_MAX_TIME,
-         'k': '1'},
+         'release_created': 0, 'release_expired': ADB_MAX_TIME, 'k': '1'},
         {'id': '3', '_key': '3_v1', '_id': 'v/3_v1',
          'first_version': 'v1', 'last_version': 'v1', 'created': 0, 'expired': ADB_MAX_TIME,
-         'k': '3'},
+         'release_created': 0, 'release_expired': 298, 'k': '3'},
         {'id': '4', '_key': '4_v1', '_id': 'v/4_v1',
          'first_version': 'v1', 'last_version': 'v1', 'created': 0, 'expired': ADB_MAX_TIME,
-         'k': '4'},
+         'release_created': 0, 'release_expired': 298, 'k': '4'},
     ]
 
     check_docs(arango_db, vexpected, 'v')
@@ -450,7 +453,7 @@ def test_rollback_with_merge_collection(arango_db):
         {'id': '1', 'from': '1', 'to': '1',
          '_key': '1_v1', '_id': 'def_e/1_v1', '_from': 'f/1_v1', '_to': 'f/1_v1',
          'first_version': 'v1', 'last_version': 'v1', 'created': 0, 'expired': ADB_MAX_TIME,
-         'k': '1'},
+         'release_created': 0, 'release_expired': ADB_MAX_TIME, 'k': '1'},
     ]
 
     check_docs(arango_db, ed_expected, 'def_e')
@@ -459,7 +462,7 @@ def test_rollback_with_merge_collection(arango_db):
         {'id': '1', 'from': '1', 'to': '1',
          '_key': '1_v1', '_id': 'e1/1_v1', '_from': 'f/1_v1', '_to': 'f/1_v1',
          'first_version': 'v1', 'last_version': 'v1', 'created': 0, 'expired': ADB_MAX_TIME,
-         'k': '1'},
+         'release_created': 0, 'release_expired': 298, 'k': '1'},
     ]
 
     check_docs(arango_db, e1_expected, 'e1')
@@ -468,7 +471,7 @@ def test_rollback_with_merge_collection(arango_db):
         {'id': '1', 'from': '1', 'to': '1',
          '_key': '1_v1', '_id': 'e2/1_v1', '_from': 'f/1_v1', '_to': 'f/1_v1',
          'first_version': 'v1', 'last_version': 'v1', 'created': 0, 'expired': ADB_MAX_TIME,
-         'k': '1'},
+         'release_created': 0, 'release_expired': 298, 'k': '1'},
     ]
 
     check_docs(arango_db, e2_expected, 'e2')
@@ -477,7 +480,7 @@ def test_rollback_with_merge_collection(arango_db):
         {'id': '1', 'from': '1', 'to': '1',
          '_key': '1_v1', '_id': 'm/1_v1', '_from': 'f/1_v1', '_to': 'f/1_v1',
          'first_version': 'v1', 'last_version': 'v1', 'created': 0, 'expired': ADB_MAX_TIME,
-         'k': '1'},
+         'release_created': 0, 'release_expired': ADB_MAX_TIME, 'k': '1'},
     ]
 
     check_docs(arango_db, m_expected, 'm')
@@ -510,17 +513,17 @@ def test_rollback_without_merge_collection(arango_db):
 
     m = ADB_MAX_TIME
 
-    _import_v(vcol, {'id': '1', 'k': '1'}, 0, m, 'v1', 'v2')
-    _import_v(vcol, {'id': '2', 'k': '2'}, 300, m, 'v2', 'v2')
-    _import_v(vcol, {'id': '3', 'k': '3'}, 0, 299, 'v1', 'v1')
-    _import_v(vcol, {'id': '3', 'k': '3'}, 300, m, 'v2', 'v2')
-    _import_v(vcol, {'id': '4', 'k': '4'}, 0, 299, 'v1', 'v1')
+    _import_v(vcol, {'id': '1', 'k': '1'}, 0, m, 0, m, 'v1', 'v2')
+    _import_v(vcol, {'id': '2', 'k': '2'}, 300, m, 299, m, 'v2', 'v2')
+    _import_v(vcol, {'id': '3', 'k': '3'}, 0, 299, 0, 298, 'v1', 'v1')
+    _import_v(vcol, {'id': '3', 'k': '3'}, 300, m, 299, m, 'v2', 'v2')
+    _import_v(vcol, {'id': '4', 'k': '4'}, 0, 299, 0, 298, 'v1', 'v1')
 
-    _import_e(ecol, {'id': '1', 'to': '1', 'from': '1', 'k': '1'}, 0, m, 'v1', 'v2', 'f')
-    _import_e(ecol, {'id': '2', 'to': '2', 'from': '2', 'k': '2'}, 300, m, 'v2', 'v2', 'f')
-    _import_e(ecol, {'id': '3', 'to': '3', 'from': '3', 'k': '3'}, 0, 299, 'v1', 'v1', 'f')
-    _import_e(ecol, {'id': '3', 'to': '3', 'from': '3', 'k': '3'}, 300, m, 'v2', 'v2', 'f')
-    _import_e(ecol, {'id': '4', 'to': '4', 'from': '4', 'k': '4'}, 0, 299, 'v1', 'v1', 'f')
+    _import_e(ecol, {'id': '1', 'to': '1', 'from': '1', 'k': '1'}, 0, m, 0, m, 'v1', 'v2', 'f')
+    _import_e(ecol, {'id': '2', 'to': '2', 'from': '2', 'k': '2'}, 300, m, 299, m, 'v2', 'v2', 'f')
+    _import_e(ecol, {'id': '3', 'to': '3', 'from': '3', 'k': '3'}, 0, 299, 0, 298, 'v1', 'v1', 'f')
+    _import_e(ecol, {'id': '3', 'to': '3', 'from': '3', 'k': '3'}, 300, m, 399, 0, 'v2', 'v2', 'f')
+    _import_e(ecol, {'id': '4', 'to': '4', 'from': '4', 'k': '4'}, 0, 299, 0, 298, 'v1', 'v1', 'f')
 
     db = ArangoBatchTimeTravellingDB(arango_db, 'r', 'v', default_edge_collection='e')
 
@@ -536,13 +539,13 @@ def test_rollback_without_merge_collection(arango_db):
     vexpected = [
         {'id': '1', '_key': '1_v1', '_id': 'v/1_v1',
          'first_version': 'v1', 'last_version': 'v1', 'created': 0, 'expired': ADB_MAX_TIME,
-         'k': '1'},
+         'release_created': 0, 'release_expired': ADB_MAX_TIME, 'k': '1'},
         {'id': '3', '_key': '3_v1', '_id': 'v/3_v1',
          'first_version': 'v1', 'last_version': 'v1', 'created': 0, 'expired': ADB_MAX_TIME,
-         'k': '3'},
+         'release_created': 0, 'release_expired': 298, 'k': '3'},
         {'id': '4', '_key': '4_v1', '_id': 'v/4_v1',
          'first_version': 'v1', 'last_version': 'v1', 'created': 0, 'expired': ADB_MAX_TIME,
-         'k': '4'},
+         'release_created': 0, 'release_expired': 298, 'k': '4'},
     ]
 
     check_docs(arango_db, vexpected, 'v')
@@ -551,15 +554,15 @@ def test_rollback_without_merge_collection(arango_db):
         {'id': '1', 'from': '1', 'to': '1',
          '_key': '1_v1', '_id': 'e/1_v1', '_from': 'f/1_v1', '_to': 'f/1_v1',
          'first_version': 'v1', 'last_version': 'v1', 'created': 0, 'expired': ADB_MAX_TIME,
-         'k': '1'},
+         'release_created': 0, 'release_expired': ADB_MAX_TIME, 'k': '1'},
         {'id': '3', 'from': '3', 'to': '3',
          '_key': '3_v1', '_id': 'e/3_v1', '_from': 'f/3_v1', '_to': 'f/3_v1',
          'first_version': 'v1', 'last_version': 'v1', 'created': 0, 'expired': ADB_MAX_TIME,
-         'k': '3'},
+         'release_created': 0, 'release_expired': 298, 'k': '3'},
         {'id': '4', 'from': '4', 'to': '4',
          '_key': '4_v1', '_id': 'e/4_v1', '_from': 'f/4_v1', '_to': 'f/4_v1',
          'first_version': 'v1', 'last_version': 'v1', 'created': 0, 'expired': ADB_MAX_TIME,
-         'k': '4'},
+         'release_created': 0, 'release_expired': 298, 'k': '4'},
     ]
 
     check_docs(arango_db, e_expected, 'e')
@@ -592,6 +595,8 @@ def _import_bulk(
         docs,
         created,
         expired,
+        release_created,
+        release_expired,
         first_version,
         last_version=None,
         vert_col_name=None):
@@ -603,28 +608,51 @@ def _import_bulk(
             d['_to'] = vert_col_name + '/' + d['to'] + '_' + first_version
         d['created'] = created
         d['expired'] = expired
+        d['release_created'] = release_created
+        d['release_expired'] = release_expired
         d['first_version'] = first_version
         d['last_version'] = last_version
     col.import_bulk(docs)
 
 # data will be modified in place
-def _import_v(col, data, created, expired, first_version, last_version):
+def _import_v(
+        col,
+        data,
+        created,
+        expired,
+        release_created,
+        release_expired,
+        first_version,
+        last_version):
     d = data
     d['_key'] = d['id'] + '_' + first_version
     d['created'] = created
     d['expired'] = expired
+    d['release_created'] = release_created
+    d['release_expired'] = release_expired
     d['first_version'] = first_version
     d['last_version'] = last_version
     col.import_bulk([d])
 
 # data will be modified in place
-def _import_e(col, data, created, expired, first_version, last_version, vert_col_name):
+def _import_e(
+        col,
+        data,
+        created,
+        expired,
+        release_created,
+        release_expired,
+        first_version,
+        last_version,
+        vert_col_name):
     d = data
     d['_key'] = d['id'] + '_' + first_version
     d['_from'] = vert_col_name + '/' + d['from'] + '_' + first_version
     d['_to'] = vert_col_name + '/' + d['to'] + '_' + first_version
     d['created'] = created
     d['expired'] = expired
+    d['release_created'] = release_created
+    d['release_expired'] = release_expired
     d['first_version'] = first_version
     d['last_version'] = last_version
     col.import_bulk([d])
