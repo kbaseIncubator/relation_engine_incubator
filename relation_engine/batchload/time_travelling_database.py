@@ -660,28 +660,35 @@ class BatchUpdater:
         update[_FLD_TO] = edge[_FLD_TO]
         self._updates.append(update)
 
-    def expire_vertex(self, key, expiration_time):
+    def expire_vertex(self, key, expiration_time, release_expiration_time):
         """
         Sets the expiration time on a vertex.
 
         key - the vertex key.
         expiration_time - the time, in Unix epoch milliseconds, to set as the expiration time
           on the vertex.
+        expiration_time - the time, in Unix epoch milliseconds, when the vertex was expired at
+          the data source.
         """
-        # TODO NOW pass release timestamp
         self._ensure_vertex()
-        self._updates.append({_FLD_KEY: key, _FLD_EXPIRED: expiration_time})
+        self._updates.append({
+            _FLD_KEY: key,
+            _FLD_EXPIRED: expiration_time,
+            _FLD_RELEASE_EXPIRED: release_expiration_time})
 
-    def expire_edge(self, edge, expiration_time):
+    def expire_edge(self, edge, expiration_time, release_expiration_time):
         """
         Sets the expiration time on an edge.
 
         edge - the edge to update. This must have been fetched from the database.
         expiration_time - the time, in Unix epoch milliseconds, to set as the expiration time
           on the edge.
+        expiration_time - the time, in Unix epoch milliseconds, when the edge was expired at
+          the data source.
         """
-        # TODO NOW pass release timestamp
-        self._update_edge(edge, {_FLD_EXPIRED: expiration_time})
+        self._update_edge(edge, {
+            _FLD_EXPIRED: expiration_time,
+            _FLD_RELEASE_EXPIRED: release_expiration_time})
 
     def update(self):
         """

@@ -1388,9 +1388,9 @@ def test_batch_expire_vertex(arango_db):
     create_timetravel_collection(arango_db, 'e', edge=True)
     arango_db.create_collection('reg')
 
-    expected = [{'_id': 'v/1', '_key': '1', 'id': 'foo', 'expired': 1000},
-                {'_id': 'v/2', '_key': '2', 'id': 'bar', 'expired': 1000},
-                {'_id': 'v/3', '_key': '3', 'id': 'baz', 'expired': 1000},
+    expected = [{'_id': 'v/1', '_key': '1', 'id': 'foo', 'expired': 1000, 'release_expired': 900},
+                {'_id': 'v/2', '_key': '2', 'id': 'bar', 'expired': 1000, 'release_expired': 900},
+                {'_id': 'v/3', '_key': '3', 'id': 'baz', 'expired': 1000, 'release_expired': 900},
                 ]
 
     col.import_bulk(expected)
@@ -1398,8 +1398,8 @@ def test_batch_expire_vertex(arango_db):
     att = ArangoBatchTimeTravellingDB(arango_db, 'reg', 'v', default_edge_collection='e')
     b = att.get_batch_updater()
 
-    b.expire_vertex('1', 500)
-    b.expire_vertex('2', 500)
+    b.expire_vertex('1', 500, 400)
+    b.expire_vertex('2', 500, 400)
 
     check_docs(arango_db, expected, 'v') # expect no changes
 
@@ -1407,9 +1407,9 @@ def test_batch_expire_vertex(arango_db):
     b.update()
     assert b.count() == 0
 
-    expected = [{'_id': 'v/1', '_key': '1', 'id': 'foo', 'expired': 500},
-                {'_id': 'v/2', '_key': '2', 'id': 'bar', 'expired': 500},
-                {'_id': 'v/3', '_key': '3', 'id': 'baz', 'expired': 1000},
+    expected = [{'_id': 'v/1', '_key': '1', 'id': 'foo', 'expired': 500, 'release_expired': 400},
+                {'_id': 'v/2', '_key': '2', 'id': 'bar', 'expired': 500, 'release_expired': 400},
+                {'_id': 'v/3', '_key': '3', 'id': 'baz', 'expired': 1000, 'release_expired': 900},
                 ]
     check_docs(arango_db, expected, 'v')
 
@@ -1426,7 +1426,7 @@ def test_batch_expire_vertex_fail_not_vertex_collection(arango_db):
 
     b = att.get_batch_updater('e')
 
-    check_exception(lambda: b.expire_vertex('k', 1), ValueError,
+    check_exception(lambda: b.expire_vertex('k', 1, 1), ValueError,
         'Batch updater is configured for an edge collection')
 
 def test_batch_expire_edge(arango_db):
@@ -1438,11 +1438,11 @@ def test_batch_expire_edge(arango_db):
     arango_db.create_collection('reg')
 
     expected = [{'_id': 'e/1', '_key': '1', '_from': 'v/2', '_to': 'v/1', 'id': 'foo',
-                 'expired': 1000},
+                 'expired': 1000, 'release_expired': 900},
                 {'_id': 'e/2', '_key': '2', '_from': 'v/2', '_to': 'v/1', 'id': 'bar',
-                 'expired': 1000},
+                 'expired': 1000, 'release_expired': 900},
                 {'_id': 'e/3', '_key': '3', '_from': 'v/2', '_to': 'v/1', 'id': 'baz',
-                 'expired': 1000},
+                 'expired': 1000, 'release_expired': 900},
                 ]
 
     col.import_bulk(expected)
@@ -1452,8 +1452,8 @@ def test_batch_expire_edge(arango_db):
 
     # these 'edges' are cheating - normally they'd be pulled from the db and have many
     # more fields, but I happen to know that just these fields are needed.
-    b.expire_edge({'_key': '1', '_from': 'v/2', '_to': 'v/1'}, 500)
-    b.expire_edge({'_key': '2', '_from': 'v/2', '_to': 'v/1'}, 500)
+    b.expire_edge({'_key': '1', '_from': 'v/2', '_to': 'v/1'}, 500, 400)
+    b.expire_edge({'_key': '2', '_from': 'v/2', '_to': 'v/1'}, 500, 400)
 
     check_docs(arango_db, expected, 'e') # expect no changes
 
@@ -1462,11 +1462,11 @@ def test_batch_expire_edge(arango_db):
     assert b.count() == 0
 
     expected = [{'_id': 'e/1', '_key': '1', '_from': 'v/2', '_to': 'v/1', 'id': 'foo',
-                 'expired': 500},
+                 'expired': 500, 'release_expired': 400},
                 {'_id': 'e/2', '_key': '2', '_from': 'v/2', '_to': 'v/1', 'id': 'bar',
-                 'expired': 500},
+                 'expired': 500, 'release_expired': 400},
                 {'_id': 'e/3', '_key': '3', '_from': 'v/2', '_to': 'v/1', 'id': 'baz',
-                 'expired': 1000},
+                 'expired': 1000, 'release_expired': 900},
                 ]
     check_docs(arango_db, expected, 'e')
 
@@ -1483,7 +1483,7 @@ def test_batch_expire_edge_fail_not_edge_collection(arango_db):
 
     b = att.get_batch_updater()
 
-    check_exception(lambda: b.expire_edge({}, 1), ValueError,
+    check_exception(lambda: b.expire_edge({}, 1, 1), ValueError,
         'Batch updater is configured for a vertex collection')
 
 ####################################
