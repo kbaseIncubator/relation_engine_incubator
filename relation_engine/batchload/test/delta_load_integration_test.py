@@ -52,7 +52,7 @@ def test_merge_setup_fail(arango_db):
     att = ArangoBatchTimeTravellingDB(arango_db, 'r', 'v', default_edge_collection='e')
 
     # sources are fake, but real not necessary to trigger error
-    check_exception(lambda: load_graph_delta('ns', [], [], att, 1, "2", merge_source=[{}]),
+    check_exception(lambda: load_graph_delta('ns', [], [], att, 1, 1, "2", merge_source=[{}]),
         ValueError, 'A merge source is specified but the database has no merge collection')
 
 def test_load_no_merge_source_batch_2(arango_db):
@@ -149,9 +149,9 @@ def _load_no_merge_source(arango_db, batchsize):
             edge_collections=['e1', 'e2'])
     
     if batchsize:
-        load_graph_delta('ns', vsource, esource, db, 500, 'v2', batch_size=batchsize)
+        load_graph_delta('ns', vsource, esource, db, 500, 400, 'v2', batch_size=batchsize)
     else: 
-        load_graph_delta('ns', vsource, esource, db, 500, 'v2')
+        load_graph_delta('ns', vsource, esource, db, 500, 400, 'v2')
 
     vexpected = [
         {'id': 'expire', '_key': 'expire_v0', '_id': 'v/expire_v0',
@@ -257,6 +257,7 @@ def _load_no_merge_source(arango_db, batchsize):
         'load_namespace': 'ns',
         'load_version': 'v2',
         'load_timestamp': 500,
+        'release_timestamp': 400,
         # 'start_time': 0,
         # 'completion_time': 0,
         'state': 'complete',
@@ -313,7 +314,7 @@ def test_merge_edges(arango_db):
     db = ArangoBatchTimeTravellingDB(arango_db, 'r', 'v', default_edge_collection='e',
             merge_collection='m')
     
-    load_graph_delta('mns', vsource, esource, db, 500, 'v2', merge_source=msource)
+    load_graph_delta('mns', vsource, esource, db, 500, 400, 'v2', merge_source=msource)
 
     vexpected = [
         {'id': 'root', '_key': 'root_v1', '_id': 'v/root_v1',
@@ -357,6 +358,7 @@ def test_merge_edges(arango_db):
         'load_namespace': 'mns',
         'load_version': 'v2',
         'load_timestamp': 500,
+        'release_timestamp': 400,
         # 'start_time': 0,
         # 'completion_time': 0,
         'state': 'complete',
@@ -381,7 +383,7 @@ def test_rollback_fail_nothing_to_roll_back(arango_db):
 
     db = ArangoBatchTimeTravellingDB(arango_db, 'r', 'v', default_edge_collection='e')
     
-    db.register_load_start('ns1', 'v1', 1000, 100)
+    db.register_load_start('ns1', 'v1', 1000, 500, 100)
     db.register_load_complete('ns1', 'v1', 150)
 
     check_exception(lambda: roll_back_last_load(db, 'ns1'), ValueError,
@@ -421,9 +423,9 @@ def test_rollback_with_merge_collection(arango_db):
     db = ArangoBatchTimeTravellingDB(arango_db, 'r', 'v', default_edge_collection='def_e',
         edge_collections=['e1', 'e2'], merge_collection='m')
 
-    db.register_load_start('ns1', 'v1', 0, 4567)
+    db.register_load_start('ns1', 'v1', 0, 0, 4567)
     db.register_load_complete('ns1', 'v1', 5678)
-    db.register_load_start('ns1', 'v2', 300, 6789)
+    db.register_load_start('ns1', 'v2', 300, 250, 6789)
     db.register_load_complete('ns1', 'v2', 7890)
 
     fac = ArangoBatchTimeTravellingDBFactory(arango_db, 'r')
@@ -486,6 +488,7 @@ def test_rollback_with_merge_collection(arango_db):
         'load_namespace': 'ns1',
         'load_version': 'v1',
         'load_timestamp': 0,
+        'release_timestamp': 0,
         'start_time': 4567,
         'completion_time': 5678,
         'state': 'complete',
@@ -521,9 +524,9 @@ def test_rollback_without_merge_collection(arango_db):
 
     db = ArangoBatchTimeTravellingDB(arango_db, 'r', 'v', default_edge_collection='e')
 
-    db.register_load_start('ns1', 'v1', 0, 4567)
+    db.register_load_start('ns1', 'v1', 0, 0, 4567)
     db.register_load_complete('ns1', 'v1', 5678)
-    db.register_load_start('ns1', 'v2', 300, 6789)
+    db.register_load_start('ns1', 'v2', 300, 250, 6789)
     db.register_load_complete('ns1', 'v2', 7890)
 
     fac = ArangoBatchTimeTravellingDBFactory(arango_db, 'r')
@@ -567,6 +570,7 @@ def test_rollback_without_merge_collection(arango_db):
         'load_namespace': 'ns1',
         'load_version': 'v1',
         'load_timestamp': 0,
+        'release_timestamp': 0,
         'start_time': 4567,
         'completion_time': 5678,
         'state': 'complete',

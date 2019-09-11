@@ -78,6 +78,12 @@ the changes between the prior load and the current load, and retaining the prior
              'NOTE: the user is responsible for ensuring this timestamp is greater than any ' +
              'other timestamps previously used to load data into the NCBI taxonomy DB.')
     parser.add_argument(
+        '--release-timestamp',
+        type=int,
+        required=True,
+        help='the timestamp, in unix epoch milliseconds, when the data was released ' +
+            'at the source.')
+    parser.add_argument(
         '--graph-id',
         help='if there are multiple graphs in the OBOGraph file, specify the full ID of the ' +
             'graph to be processed. If there is only one graph this flag may be omitted.')
@@ -116,6 +122,7 @@ def main():
         loader.get_edge_provider(),
         attdb,
         a.load_timestamp,
+        a.release_timestamp,
         a.load_version,
         merge_source=loader.get_merge_provider())
 

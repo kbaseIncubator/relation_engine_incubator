@@ -264,7 +264,7 @@ def test_register_load_start(arango_db):
 
     att = ArangoBatchTimeTravellingDB(arango_db, 'reg', 'v', edge_collections=['e'])
 
-    att.register_load_start('GeneOntology', '09-08-07', 1000, 500)
+    att.register_load_start('GeneOntology', '09-08-07', 1000, 800, 500)
 
     expected = [{
         '_key': 'GeneOntology_09-08-07',
@@ -272,6 +272,7 @@ def test_register_load_start(arango_db):
         'load_namespace': 'GeneOntology',
         'load_version': '09-08-07',
         'load_timestamp': 1000,
+        'release_timestamp': 800,
         'start_time': 500,
         'completion_time': None,
         'state': 'in_progress',
@@ -297,7 +298,7 @@ def test_register_load_start_with_merge_col_and_multiple_edge_cols(arango_db):
         arango_db, 'reg', 'v', merge_collection='m', default_edge_collection='e2',
         edge_collections=['e1', 'e3'])
 
-    att.register_load_start('GeneOntology', '09-08-07', 1000, 500)
+    att.register_load_start('GeneOntology', '09-08-07', 1000, 800, 500)
 
     expected = [{
         '_key': 'GeneOntology_09-08-07',
@@ -305,6 +306,7 @@ def test_register_load_start_with_merge_col_and_multiple_edge_cols(arango_db):
         'load_namespace': 'GeneOntology',
         'load_version': '09-08-07',
         'load_timestamp': 1000,
+        'release_timestamp': 800,
         'start_time': 500,
         'completion_time': None,
         'state': 'in_progress',
@@ -326,9 +328,9 @@ def test_register_load_start_fail_doc_exists(arango_db):
 
     att = ArangoBatchTimeTravellingDB(arango_db, 'reg', 'v', edge_collections=['e'])
 
-    att.register_load_start('GeneOntology', '09-08-07', 1000, 500)
+    att.register_load_start('GeneOntology', '09-08-07', 1000, 800, 500)
     
-    check_exception(lambda: att.register_load_start('GeneOntology', '09-08-07', 8000, 400),
+    check_exception(lambda: att.register_load_start('GeneOntology', '09-08-07', 8000, 7000, 400),
         ValueError, 'Load is already registered')
 
 def test_register_load_complete(arango_db):
@@ -341,7 +343,7 @@ def test_register_load_complete(arango_db):
 
     att = ArangoBatchTimeTravellingDB(arango_db, 'reg', 'v', edge_collections=['e'])
 
-    att.register_load_start('GeneOntology', '09-08-07', 1000, 500)
+    att.register_load_start('GeneOntology', '09-08-07', 1000, 700, 500)
     att.register_load_complete('GeneOntology', '09-08-07', 800)
 
     expected = [{
@@ -350,6 +352,7 @@ def test_register_load_complete(arango_db):
         'load_namespace': 'GeneOntology',
         'load_version': '09-08-07',
         'load_timestamp': 1000,
+        'release_timestamp': 700,
         'start_time': 500,
         'completion_time': 800,
         'state': 'complete',
@@ -383,7 +386,7 @@ def test_register_load_rollback(arango_db):
 
     att = ArangoBatchTimeTravellingDB(arango_db, 'reg', 'v', edge_collections=['e'])
 
-    att.register_load_start('GeneOntology', '09-08-07', 1000, 500)
+    att.register_load_start('GeneOntology', '09-08-07', 1000, 700, 500)
     att.register_load_complete('GeneOntology', '09-08-07', 800)
     att.register_load_rollback('GeneOntology', '09-08-07')
 
@@ -393,6 +396,7 @@ def test_register_load_rollback(arango_db):
         'load_namespace': 'GeneOntology',
         'load_version': '09-08-07',
         'load_timestamp': 1000,
+        'release_timestamp': 700,
         'start_time': 500,
         'completion_time': 800,
         'state': 'rollback',
@@ -426,7 +430,7 @@ def test_get_registered_loads_empty(arango_db):
 
     att = ArangoBatchTimeTravellingDB(arango_db, 'reg', 'v', edge_collections=['e'])
 
-    att.register_load_start('ns2', 'v3', 700, 400)
+    att.register_load_start('ns2', 'v3', 700, 600, 400)
 
     assert att.get_registered_loads('ns1') == []
 
@@ -440,12 +444,12 @@ def test_get_registered_loads(arango_db):
 
     att = ArangoBatchTimeTravellingDB(arango_db, 'reg', 'v', edge_collections=['e'])
 
-    att.register_load_start('ns1', 'v3', 700, 400)
-    att.register_load_start('ns1', 'v1', 500, 300)
+    att.register_load_start('ns1', 'v3', 700, 620, 400)
+    att.register_load_start('ns1', 'v1', 500, 410, 300)
     att.register_load_complete('ns1', 'v1', 350)
-    att.register_load_start('ns1', 'v2', 600, 360)
+    att.register_load_start('ns1', 'v2', 600, 510, 360)
     att.register_load_complete('ns1', 'v2', 390)
-    att.register_load_start('ns2', 'v3', 700, 400)
+    att.register_load_start('ns2', 'v3', 700, 610, 400)
 
     expected = [
         {'_key': 'ns1_v3',
@@ -453,6 +457,7 @@ def test_get_registered_loads(arango_db):
          'load_namespace': 'ns1',
          'load_version': 'v3',
          'load_timestamp': 700,
+         'release_timestamp': 620,
          'start_time': 400,
          'completion_time': None,
          'state': 'in_progress',
@@ -465,6 +470,7 @@ def test_get_registered_loads(arango_db):
          'load_namespace': 'ns1',
          'load_version': 'v2',
          'load_timestamp': 600,
+         'release_timestamp': 510,
          'start_time': 360,
          'completion_time': 390,
          'state': 'complete',
@@ -477,6 +483,7 @@ def test_get_registered_loads(arango_db):
          'load_namespace': 'ns1',
          'load_version': 'v1',
          'load_timestamp': 500,
+         'release_timestamp': 410,
          'start_time': 300,
          'completion_time': 350,
          'state': 'complete',
@@ -494,6 +501,7 @@ def test_get_registered_loads(arango_db):
          'load_namespace': 'ns2',
          'load_version': 'v3',
          'load_timestamp': 700,
+         'release_timestamp': 610,
          'start_time': 400,
          'completion_time': None,
          'state': 'in_progress',
@@ -515,10 +523,10 @@ def test_delete_registered_load(arango_db):
 
     att = ArangoBatchTimeTravellingDB(arango_db, 'reg', 'v', edge_collections=['e'])
 
-    att.register_load_start('ns1', 'v3', 700, 400)
-    att.register_load_start('ns1', 'v1', 500, 300)
+    att.register_load_start('ns1', 'v3', 700, 610, 400)
+    att.register_load_start('ns1', 'v1', 500, 410, 300)
     att.register_load_complete('ns1', 'v1', 350)
-    att.register_load_start('ns1', 'v2', 600, 360)
+    att.register_load_start('ns1', 'v2', 600, 510, 360)
     att.register_load_complete('ns1', 'v2', 390)
     att.delete_registered_load('ns1', 'v3')
 
@@ -528,6 +536,7 @@ def test_delete_registered_load(arango_db):
          'load_namespace': 'ns1',
          'load_version': 'v2',
          'load_timestamp': 600,
+         'release_timestamp': 510,
          'start_time': 360,
          'completion_time': 390,
          'state': 'complete',
@@ -540,6 +549,7 @@ def test_delete_registered_load(arango_db):
          'load_namespace': 'ns1',
          'load_version': 'v1',
          'load_timestamp': 500,
+         'release_timestamp': 410,
          'start_time': 300,
          'completion_time': 350,
          'state': 'complete',
@@ -561,8 +571,8 @@ def test_delete_registered_load_fail_no_load(arango_db):
 
     att = ArangoBatchTimeTravellingDB(arango_db, 'reg', 'v', edge_collections=['e'])
 
-    att.register_load_start('ns1', 'v3', 700, 400)
-    att.register_load_start('ns1', 'v1', 500, 300)
+    att.register_load_start('ns1', 'v3', 700, 600, 400)
+    att.register_load_start('ns1', 'v1', 500, 400, 300)
     att.register_load_complete('ns1', 'v1', 350)
 
     check_exception(lambda: att.delete_registered_load('ns1', 'v2'),
@@ -1511,7 +1521,7 @@ def test_factory_get_registered_loads_empty(arango_db):
 
     att = ArangoBatchTimeTravellingDB(arango_db, 'reg', 'v', edge_collections=['e'])
 
-    att.register_load_start('ns2', 'v3', 700, 400)
+    att.register_load_start('ns2', 'v3', 700, 500, 400)
 
     fac = ArangoBatchTimeTravellingDBFactory(arango_db, 'reg')
 
@@ -1527,12 +1537,12 @@ def test_factory_get_registered_loads(arango_db):
 
     att = ArangoBatchTimeTravellingDB(arango_db, 'reg', 'v', edge_collections=['e'])
 
-    att.register_load_start('ns1', 'v3', 700, 400)
-    att.register_load_start('ns1', 'v1', 500, 300)
+    att.register_load_start('ns1', 'v3', 700, 610, 400)
+    att.register_load_start('ns1', 'v1', 500, 410, 300)
     att.register_load_complete('ns1', 'v1', 350)
-    att.register_load_start('ns1', 'v2', 600, 360)
+    att.register_load_start('ns1', 'v2', 600, 510, 360)
     att.register_load_complete('ns1', 'v2', 390)
-    att.register_load_start('ns2', 'v3', 700, 400)
+    att.register_load_start('ns2', 'v3', 700, 620, 400)
 
     expected = [
         {'_key': 'ns1_v3',
@@ -1540,6 +1550,7 @@ def test_factory_get_registered_loads(arango_db):
          'load_namespace': 'ns1',
          'load_version': 'v3',
          'load_timestamp': 700,
+         'release_timestamp': 610,
          'start_time': 400,
          'completion_time': None,
          'state': 'in_progress',
@@ -1552,6 +1563,7 @@ def test_factory_get_registered_loads(arango_db):
          'load_namespace': 'ns1',
          'load_version': 'v2',
          'load_timestamp': 600,
+         'release_timestamp': 510,
          'start_time': 360,
          'completion_time': 390,
          'state': 'complete',
@@ -1564,6 +1576,7 @@ def test_factory_get_registered_loads(arango_db):
          'load_namespace': 'ns1',
          'load_version': 'v1',
          'load_timestamp': 500,
+         'release_timestamp': 410,
          'start_time': 300,
          'completion_time': 350,
          'state': 'complete',
@@ -1583,6 +1596,7 @@ def test_factory_get_registered_loads(arango_db):
          'load_namespace': 'ns2',
          'load_version': 'v3',
          'load_timestamp': 700,
+         'release_timestamp': 620,
          'start_time': 400,
          'completion_time': None,
          'state': 'in_progress',
