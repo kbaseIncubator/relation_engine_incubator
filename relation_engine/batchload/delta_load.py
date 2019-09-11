@@ -283,7 +283,6 @@ def roll_back_last_load(database, load_namespace):
 
     for c in collections:
         db.delete_created_documents(c, timestamp)
-        # TODO NOW pass release timestamp 
         db.undo_expire_documents(c, timestamp - 1)
         db.reset_last_version(c, current_ver, prior_ver)
     

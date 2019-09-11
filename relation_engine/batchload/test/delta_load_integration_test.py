@@ -441,10 +441,10 @@ def test_rollback_with_merge_collection(arango_db):
          'release_created': 0, 'release_expired': ADB_MAX_TIME, 'k': '1'},
         {'id': '3', '_key': '3_v1', '_id': 'v/3_v1',
          'first_version': 'v1', 'last_version': 'v1', 'created': 0, 'expired': ADB_MAX_TIME,
-         'release_created': 0, 'release_expired': 298, 'k': '3'},
+         'release_created': 0, 'release_expired': ADB_MAX_TIME, 'k': '3'},
         {'id': '4', '_key': '4_v1', '_id': 'v/4_v1',
          'first_version': 'v1', 'last_version': 'v1', 'created': 0, 'expired': ADB_MAX_TIME,
-         'release_created': 0, 'release_expired': 298, 'k': '4'},
+         'release_created': 0, 'release_expired': ADB_MAX_TIME, 'k': '4'},
     ]
 
     check_docs(arango_db, vexpected, 'v')
@@ -462,7 +462,7 @@ def test_rollback_with_merge_collection(arango_db):
         {'id': '1', 'from': '1', 'to': '1',
          '_key': '1_v1', '_id': 'e1/1_v1', '_from': 'f/1_v1', '_to': 'f/1_v1',
          'first_version': 'v1', 'last_version': 'v1', 'created': 0, 'expired': ADB_MAX_TIME,
-         'release_created': 0, 'release_expired': 298, 'k': '1'},
+         'release_created': 0, 'release_expired': ADB_MAX_TIME, 'k': '1'},
     ]
 
     check_docs(arango_db, e1_expected, 'e1')
@@ -471,7 +471,7 @@ def test_rollback_with_merge_collection(arango_db):
         {'id': '1', 'from': '1', 'to': '1',
          '_key': '1_v1', '_id': 'e2/1_v1', '_from': 'f/1_v1', '_to': 'f/1_v1',
          'first_version': 'v1', 'last_version': 'v1', 'created': 0, 'expired': ADB_MAX_TIME,
-         'release_created': 0, 'release_expired': 298, 'k': '1'},
+         'release_created': 0, 'release_expired': ADB_MAX_TIME, 'k': '1'},
     ]
 
     check_docs(arango_db, e2_expected, 'e2')
@@ -542,10 +542,10 @@ def test_rollback_without_merge_collection(arango_db):
          'release_created': 0, 'release_expired': ADB_MAX_TIME, 'k': '1'},
         {'id': '3', '_key': '3_v1', '_id': 'v/3_v1',
          'first_version': 'v1', 'last_version': 'v1', 'created': 0, 'expired': ADB_MAX_TIME,
-         'release_created': 0, 'release_expired': 298, 'k': '3'},
+         'release_created': 0, 'release_expired': ADB_MAX_TIME, 'k': '3'},
         {'id': '4', '_key': '4_v1', '_id': 'v/4_v1',
          'first_version': 'v1', 'last_version': 'v1', 'created': 0, 'expired': ADB_MAX_TIME,
-         'release_created': 0, 'release_expired': 298, 'k': '4'},
+         'release_created': 0, 'release_expired': ADB_MAX_TIME, 'k': '4'},
     ]
 
     check_docs(arango_db, vexpected, 'v')
@@ -558,11 +558,11 @@ def test_rollback_without_merge_collection(arango_db):
         {'id': '3', 'from': '3', 'to': '3',
          '_key': '3_v1', '_id': 'e/3_v1', '_from': 'f/3_v1', '_to': 'f/3_v1',
          'first_version': 'v1', 'last_version': 'v1', 'created': 0, 'expired': ADB_MAX_TIME,
-         'release_created': 0, 'release_expired': 298, 'k': '3'},
+         'release_created': 0, 'release_expired': ADB_MAX_TIME, 'k': '3'},
         {'id': '4', 'from': '4', 'to': '4',
          '_key': '4_v1', '_id': 'e/4_v1', '_from': 'f/4_v1', '_to': 'f/4_v1',
          'first_version': 'v1', 'last_version': 'v1', 'created': 0, 'expired': ADB_MAX_TIME,
-         'release_created': 0, 'release_expired': 298, 'k': '4'},
+         'release_created': 0, 'release_expired': ADB_MAX_TIME, 'k': '4'},
     ]
 
     check_docs(arango_db, e_expected, 'e')

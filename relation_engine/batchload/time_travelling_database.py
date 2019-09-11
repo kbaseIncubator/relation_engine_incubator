@@ -488,13 +488,15 @@ class ArangoBatchTimeTravellingDB:
         expire_time - the time of expiration, in unix epoch milliseconds, of the documents to
           un-expire.
         """
-        # TODO NOW pass release timestamp
         col = self._get_collection(collection) # ensure collection exists
         self._database.aql.execute(
             f"""
             FOR d IN @@col
                 FILTER d.{_FLD_EXPIRED} == @timestamp
-                UPDATE d WITH {{{_FLD_EXPIRED}: {_MAX_ADB_INTEGER}}} IN @@col
+                UPDATE d WITH {{
+                    {_FLD_EXPIRED}: {_MAX_ADB_INTEGER},
+                    {_FLD_RELEASE_EXPIRED}: {_MAX_ADB_INTEGER}
+                }} IN @@col
             """,
             bind_vars={'timestamp': expire_time, '@col': col.name},
         )
