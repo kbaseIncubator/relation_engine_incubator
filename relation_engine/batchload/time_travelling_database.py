@@ -402,23 +402,26 @@ class ArangoBatchTimeTravellingDB:
         return self._get_documents(ids, timestamp, col_name)
 
     # may need to separate timestamp into find and expire timestamps, but YAGNI for now
-    def expire_extant_vertices_without_last_version(self, timestamp, version):
+    def expire_extant_vertices_without_last_version(self, timestamp, release_timestamp, version):
         """
         Expire all vertices that exist at the given timestamp where the last version field is 
         not equal to the given version. The expiration date will be the given timestamp.
 
         timestamp - the timestamp to use to find extant vertices as well as the timestamp to use
-          as the expiration date.
+          as the expiration date in Unix epoch milliseconds.
+        release_timestamp - the timestamp to use as the expiration date at the data source
+          in Unix epoch milliseconds.
         version - the version required for the last version field for a vertex to avoid expiration.
         """
-        # TODO NOW pass release timestamp
         col = self._vertex_collection
-        self._expire_extant_document_without_last_version(timestamp, version, col)
+        self._expire_extant_document_without_last_version(
+            timestamp, release_timestamp, version, col)
 
     # may need to separate timestamp into find and expire timestamps, but YAGNI for now
     def expire_extant_edges_without_last_version(
             self,
             timestamp,
+            release_timestamp,
             version,
             edge_collection=None):
         """
@@ -427,23 +430,35 @@ class ArangoBatchTimeTravellingDB:
 
         timestamp - the timestamp to use to find extant edges as well as the timestamp to use
           as the expiration date.
+        release_timestamp - the timestamp to use as the expiration date at the data source
+          in Unix epoch milliseconds.
         version - the version required for the last version field for a edges to avoid expiration.
         edge_collection - the collection name to query. If none is provided, the default will
           be used.
         """
-        # TODO NOW pass release timestamp
         col = self._get_edge_collection(edge_collection)
-        self._expire_extant_document_without_last_version(timestamp, version, col)
+        self._expire_extant_document_without_last_version(
+            timestamp, release_timestamp, version, col)
     
-    def _expire_extant_document_without_last_version(self, timestamp, version, col):
+    def _expire_extant_document_without_last_version(
+            self,
+            timestamp,
+            release_timestamp,
+            version,
+            col):
         self._database.aql.execute(
             f"""
             FOR d IN @@col
                 FILTER d.{_FLD_EXPIRED} >= @timestamp && d.{_FLD_CREATED} <= @timestamp
                 FILTER d.{_FLD_VER_LST} != @version
-                UPDATE d WITH {{{_FLD_EXPIRED}: @timestamp}} IN @@col
+                UPDATE d WITH {{{_FLD_EXPIRED}: @timestamp, {_FLD_RELEASE_EXPIRED}: @reltimestamp}}
+                    IN @@col
             """,
-            bind_vars={'version': version, 'timestamp': timestamp, '@col': col.name},
+            bind_vars={
+                'version': version,
+                'timestamp': timestamp,
+                'reltimestamp': release_timestamp,
+                '@col': col.name},
         )
 
     # TODO PERF could add created index to speed this up
@@ -667,8 +682,8 @@ class BatchUpdater:
         key - the vertex key.
         expiration_time - the time, in Unix epoch milliseconds, to set as the expiration time
           on the vertex.
-        expiration_time - the time, in Unix epoch milliseconds, when the vertex was expired at
-          the data source.
+        release_expiration_time - the time, in Unix epoch milliseconds, when the vertex was
+          expired at the data source.
         """
         self._ensure_vertex()
         self._updates.append({
@@ -683,8 +698,8 @@ class BatchUpdater:
         edge - the edge to update. This must have been fetched from the database.
         expiration_time - the time, in Unix epoch milliseconds, to set as the expiration time
           on the edge.
-        expiration_time - the time, in Unix epoch milliseconds, when the edge was expired at
-          the data source.
+        release_expiration_time - the time, in Unix epoch milliseconds, when the edge was expired
+          at the data source.
         """
         self._update_edge(edge, {
             _FLD_EXPIRED: expiration_time,

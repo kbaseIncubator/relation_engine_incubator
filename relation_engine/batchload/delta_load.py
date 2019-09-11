@@ -76,14 +76,15 @@ def load_graph_delta(
         _process_merges(db, merge_source, timestamp, release_timestamp, load_version, batch_size)
     
     if _VERBOSE: print(f'expiring vertices: {_time.time()}')
-    db.expire_extant_vertices_without_last_version(timestamp - 1, load_version)
+    db.expire_extant_vertices_without_last_version(
+        timestamp - 1, release_timestamp - 1, load_version)
 
     _process_edges(db, edge_source, timestamp, release_timestamp, load_version, batch_size)
     
     if _VERBOSE: print(f'expiring edges: {_time.time()}')
     for col in db.get_edge_collections():
         db.expire_extant_edges_without_last_version(
-            timestamp - 1, load_version, edge_collection=col)
+            timestamp - 1, release_timestamp -1,  load_version, edge_collection=col)
 
     db.register_load_complete(load_namespace, load_version, _get_current_timestamp())
 

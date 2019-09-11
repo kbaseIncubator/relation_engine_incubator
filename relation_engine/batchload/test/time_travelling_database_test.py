@@ -683,30 +683,35 @@ def test_expire_extant_vertices_without_last_version(arango_db):
     arango_db.create_collection('reg')
 
     test_data = [
-        {'_key': '0', 'id': 'baz', 'created': 100, 'expired': 300, 'last_version': '2'},
-        {'_key': '1', 'id': 'foo', 'created': 100, 'expired': 600, 'last_version': '1'},
-        {'_key': '2', 'id': 'bar', 'created': 100, 'expired': 200, 'last_version': '1'},
-        {'_key': '3', 'id': 'bar', 'created': 201, 'expired': 300, 'last_version': '2'},
-        {'_key': '4', 'id': 'bar', 'created': 301, 'expired': 400, 'last_version': '2'},
+        {'_key': '0', 'id': 'baz', 'created': 100, 'expired': 300,
+         'release_created': 99, 'release_expired': 299, 'last_version': '2'},
+        {'_key': '1', 'id': 'foo', 'created': 100, 'expired': 600,
+         'release_created': 99, 'release_expired': 599, 'last_version': '1'},
+        {'_key': '2', 'id': 'bar', 'created': 100, 'expired': 200,
+         'release_created': 99, 'release_expired': 199, 'last_version': '1'},
+        {'_key': '3', 'id': 'bar', 'created': 201, 'expired': 300,
+         'release_created': 198, 'release_expired': 299, 'last_version': '2'},
+        {'_key': '4', 'id': 'bar', 'created': 301, 'expired': 400,
+         'release_created': 298, 'release_expired': 399, 'last_version': '2'},
         ]
     col.import_bulk(test_data)
 
     att = ArangoBatchTimeTravellingDB(arango_db, 'reg', col_name,    default_edge_collection='e')
 
     # test 1
-    att.expire_extant_vertices_without_last_version(100, "2")
+    att.expire_extant_vertices_without_last_version(100, 99, "2")
 
     expected = [
         {'_key': '0', '_id': 'verts/0', 'id': 'baz', 'created': 100, 'expired': 300,
-         'last_version': '2'},
+         'release_created': 99, 'release_expired': 299, 'last_version': '2'},
         {'_key': '1', '_id': 'verts/1', 'id': 'foo', 'created': 100, 'expired': 100,
-         'last_version': '1'},
+         'release_created': 99, 'release_expired': 99, 'last_version': '1'},
         {'_key': '2', '_id': 'verts/2', 'id': 'bar', 'created': 100, 'expired': 100,
-         'last_version': '1'},
+         'release_created': 99, 'release_expired': 99, 'last_version': '1'},
         {'_key': '3', '_id': 'verts/3', 'id': 'bar', 'created': 201, 'expired': 300,
-         'last_version': '2'},
+         'release_created': 198, 'release_expired': 299, 'last_version': '2'},
         {'_key': '4', '_id': 'verts/4', 'id': 'bar', 'created': 301, 'expired': 400,
-         'last_version': '2'},
+         'release_created': 298, 'release_expired': 399, 'last_version': '2'},
         ]
 
     check_docs(arango_db, expected, col_name)
@@ -715,19 +720,19 @@ def test_expire_extant_vertices_without_last_version(arango_db):
     col.delete_match({})
     col.import_bulk(test_data)
 
-    att.expire_extant_vertices_without_last_version(299, "1")
+    att.expire_extant_vertices_without_last_version(299, 297, "1")
 
     expected = [
         {'_key': '0', '_id': 'verts/0', 'id': 'baz', 'created': 100, 'expired': 299,
-         'last_version': '2'},
+         'release_created': 99, 'release_expired': 297, 'last_version': '2'},
         {'_key': '1', '_id': 'verts/1', 'id': 'foo', 'created': 100, 'expired': 600,
-         'last_version': '1'},
+         'release_created': 99, 'release_expired': 599, 'last_version': '1'},
         {'_key': '2', '_id': 'verts/2', 'id': 'bar', 'created': 100, 'expired': 200,
-         'last_version': '1'},
+         'release_created': 99, 'release_expired': 199, 'last_version': '1'},
         {'_key': '3', '_id': 'verts/3', 'id': 'bar', 'created': 201, 'expired': 299,
-         'last_version': '2'},
+         'release_created': 198, 'release_expired': 297, 'last_version': '2'},
         {'_key': '4', '_id': 'verts/4', 'id': 'bar', 'created': 301, 'expired': 400,
-         'last_version': '2'},
+         'release_created': 298, 'release_expired': 399, 'last_version': '2'},
         ]
 
     check_docs(arango_db, expected, col_name)
@@ -746,15 +751,15 @@ def test_expire_extant_edges_without_last_version(arango_db):
 
     test_data = [
         {'_key': '0', 'id': 'baz', 'created': 100, 'expired': 300, 'last_version': '2',
-         '_from': 'fake/1', '_to': 'fake/2'},
+         'release_created': 99, 'release_expired': 299, '_from': 'fake/1', '_to': 'fake/2'},
         {'_key': '1', 'id': 'foo', 'created': 100, 'expired': 600, 'last_version': '1',
-         '_from': 'fake/1', '_to': 'fake/2'},
+         'release_created': 99, 'release_expired': 599, '_from': 'fake/1', '_to': 'fake/2'},
         {'_key': '2', 'id': 'bar', 'created': 100, 'expired': 200, 'last_version': '1',
-         '_from': 'fake/1', '_to': 'fake/2'},
+         'release_created': 99, 'release_expired': 199, '_from': 'fake/1', '_to': 'fake/2'},
         {'_key': '3', 'id': 'bar', 'created': 201, 'expired': 300, 'last_version': '2',
-         '_from': 'fake/1', '_to': 'fake/2'},
+         'release_created': 198, 'release_expired': 299, '_from': 'fake/1', '_to': 'fake/2'},
         {'_key': '4', 'id': 'bar', 'created': 301, 'expired': 400, 'last_version': '2',
-         '_from': 'fake/1', '_to': 'fake/2'},
+         'release_created': 298, 'release_expired': 399, '_from': 'fake/1', '_to': 'fake/2'},
         ]
     col.import_bulk(test_data)
 
@@ -762,18 +767,23 @@ def test_expire_extant_edges_without_last_version(arango_db):
         arango_db, 'reg', 'v', edge_collections=[col_name], merge_collection='m')
 
     # test 1
-    att.expire_extant_edges_without_last_version(100, '2', edge_collection=col_name)
+    att.expire_extant_edges_without_last_version(100, 99, '2', edge_collection=col_name)
 
     expected = [
         {'_key': '0', '_id': 'edges/0', 'id': 'baz', 'created': 100, 'expired': 300,
+        'release_created': 99, 'release_expired': 299, 
          'last_version': '2', '_from': 'fake/1', '_to': 'fake/2'},
         {'_key': '1', '_id': 'edges/1', 'id': 'foo', 'created': 100, 'expired': 100,
+        'release_created': 99, 'release_expired': 99, 
          'last_version': '1', '_from': 'fake/1', '_to': 'fake/2'},
         {'_key': '2', '_id': 'edges/2', 'id': 'bar', 'created': 100, 'expired': 100,
+        'release_created': 99, 'release_expired': 99, 
          'last_version': '1', '_from': 'fake/1', '_to': 'fake/2'},
         {'_key': '3', '_id': 'edges/3', 'id': 'bar', 'created': 201, 'expired': 300,
+        'release_created': 198, 'release_expired': 299, 
          'last_version': '2', '_from': 'fake/1', '_to': 'fake/2'},
         {'_key': '4', '_id': 'edges/4', 'id': 'bar', 'created': 301, 'expired': 400,
+        'release_created': 298, 'release_expired': 399, 
          'last_version': '2', '_from': 'fake/1', '_to': 'fake/2'},
         ]
 
@@ -783,18 +793,23 @@ def test_expire_extant_edges_without_last_version(arango_db):
     col.delete_match({})
     col.import_bulk(test_data)
 
-    att.expire_extant_edges_without_last_version(299, '1', edge_collection=col_name)
+    att.expire_extant_edges_without_last_version(299, 297, '1', edge_collection=col_name)
 
     expected = [
         {'_key': '0', '_id': 'edges/0', 'id': 'baz', 'created': 100, 'expired': 299,
+        'release_created': 99, 'release_expired': 297, 
          'last_version': '2', '_from': 'fake/1', '_to': 'fake/2'},
         {'_key': '1', '_id': 'edges/1', 'id': 'foo', 'created': 100, 'expired': 600,
+        'release_created': 99, 'release_expired': 599, 
          'last_version': '1', '_from': 'fake/1', '_to': 'fake/2'},
         {'_key': '2', '_id': 'edges/2', 'id': 'bar', 'created': 100, 'expired': 200,
+        'release_created': 99, 'release_expired': 199, 
          'last_version': '1', '_from': 'fake/1', '_to': 'fake/2'},
         {'_key': '3', '_id': 'edges/3', 'id': 'bar', 'created': 201, 'expired': 299,
+        'release_created': 198, 'release_expired': 297, 
          'last_version': '2', '_from': 'fake/1', '_to': 'fake/2'},
         {'_key': '4', '_id': 'edges/4', 'id': 'bar', 'created': 301, 'expired': 400,
+        'release_created': 298, 'release_expired': 399, 
          'last_version': '2', '_from': 'fake/1', '_to': 'fake/2'},
         ]
 
