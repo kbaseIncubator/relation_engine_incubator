@@ -820,11 +820,16 @@ def test_expire_extant_edges_without_last_version(arango_db):
 ##############################################
 
 REVERT_TEST_DATA = [
-    {'_key': '0', 'id': 'baz', 'created': 100, 'expired': 300, 'last_version': '2'},
-    {'_key': '1', 'id': 'foo', 'created': 100, 'expired': 600, 'last_version': '1'},
-    {'_key': '2', 'id': 'bar', 'created': 100, 'expired': 200, 'last_version': '1'},
-    {'_key': '3', 'id': 'bar', 'created': 201, 'expired': 300, 'last_version': '2'},
-    {'_key': '4', 'id': 'bar', 'created': 301, 'expired': 400, 'last_version': '2'},
+    {'_key': '0', 'id': 'baz', 'created': 100, 'expired': 300,
+     'release_created': 99, 'release_expired': 299, 'last_version': '2'},
+    {'_key': '1', 'id': 'foo', 'created': 100, 'expired': 600,
+     'release_created': 99, 'release_expired': 599, 'last_version': '1'},
+    {'_key': '2', 'id': 'bar', 'created': 100, 'expired': 200,
+     'release_created': 99, 'release_expired': 199, 'last_version': '1'},
+    {'_key': '3', 'id': 'bar', 'created': 201, 'expired': 300,
+     'release_created': 198, 'release_expired': 299, 'last_version': '2'},
+    {'_key': '4', 'id': 'bar', 'created': 301, 'expired': 400,
+     'release_created': 298, 'release_expired': 399, 'last_version': '2'},
     ]
 
 def _prep_data_for_revert_tests(colname, edge=False):
@@ -938,6 +943,8 @@ def test_undo_expire_documents(arango_db):
         att.undo_expire_documents(col.name, 300)
         actual_expected[0]['expired'] = 9007199254740991
         actual_expected[3]['expired'] = 9007199254740991
+        actual_expected[0]['release_expired'] = 9007199254740991
+        actual_expected[3]['release_expired'] = 9007199254740991
     
         check_docs(arango_db, actual_expected, col.name)
 
