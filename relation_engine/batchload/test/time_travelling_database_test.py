@@ -1087,10 +1087,10 @@ def test_batch_create_vertices(arango_db):
     
     b = att.get_batch_updater()
 
-    key = b.create_vertex('id1', 'ver1', 800, {'foo': 'bar'})
+    key = b.create_vertex('id1', 'ver1', 800, 700, {'foo': 'bar'})
     assert key == 'id1_ver1'
 
-    key = b.create_vertex('id2', 'ver2', 900, {'foo': 'bar1'})
+    key = b.create_vertex('id2', 'ver2', 900, 850, {'foo': 'bar1'})
     assert key == 'id2_ver2'
 
     assert col.count() == 0 # no verts should've been created yet
@@ -1104,6 +1104,8 @@ def test_batch_create_vertices(arango_db):
          '_id': 'v/id1_ver1',
          'created': 800,
          'expired': 9007199254740991,
+         'release_created': 700,
+         'release_expired': 9007199254740991,
          'first_version': 'ver1',
          'id': 'id1',
          'last_version': 'ver1',
@@ -1112,6 +1114,8 @@ def test_batch_create_vertices(arango_db):
          '_id': 'v/id2_ver2',
          'created': 900,
          'expired': 9007199254740991,
+         'release_created': 850,
+         'release_expired': 9007199254740991,
          'first_version': 'ver2',
          'id': 'id2',
          'last_version': 'ver2',
@@ -1131,7 +1135,7 @@ def test_batch_create_vertex_fail_not_vertex_collection(arango_db):
 
     b = att.get_batch_updater('e')
 
-    check_exception(lambda: b.create_vertex('i', 'v', 6, {}), ValueError,
+    check_exception(lambda: b.create_vertex('i', 'v', 6, 5, {}), ValueError,
         'Batch updater is configured for an edge collection')
 
 def test_batch_create_edges(arango_db):
@@ -1153,7 +1157,8 @@ def test_batch_create_edges(arango_db):
         {'id': 'whee', '_id': 'v/1'},
         {'id': 'whoo', '_id': 'v/2'},
         'ver1',
-        800)
+        800,
+        700)
     assert key == 'id1_ver1'
 
     key = b.create_edge(
@@ -1162,6 +1167,7 @@ def test_batch_create_edges(arango_db):
         {'id': 'whoo2', '_id': 'v/4'},
         'ver2',
         900,
+        850,
         {'foo': 'bar1'})
     assert key == 'id2_ver2'
 
@@ -1180,6 +1186,8 @@ def test_batch_create_edges(arango_db):
          '_to': 'v/2',
          'created': 800,
          'expired': 9007199254740991,
+         'release_created': 700,
+         'release_expired': 9007199254740991,
          'first_version': 'ver1',
          'id': 'id1',
          'last_version': 'ver1'},
@@ -1191,6 +1199,8 @@ def test_batch_create_edges(arango_db):
          '_to': 'v/4',
          'created': 900,
          'expired': 9007199254740991,
+         'release_created': 850,
+         'release_expired': 9007199254740991,
          'first_version': 'ver2',
          'id': 'id2',
          'last_version': 'ver2',
@@ -1221,7 +1231,8 @@ def test_batch_create_mergeedge(arango_db):
         {'id': 'whee', '_id': 'v/1'},
         {'id': 'whoo', '_id': 'v/2'},
         'ver1',
-        800)
+        800,
+        700)
     assert key == 'id1_ver1'
 
     assert col.count() == 0 # no edges should've been created yet
@@ -1239,6 +1250,8 @@ def test_batch_create_mergeedge(arango_db):
          '_to': 'v/2',
          'created': 800,
          'expired': 9007199254740991,
+         'release_created': 700,
+         'release_expired': 9007199254740991,
          'first_version': 'ver1',
          'id': 'id1',
          'last_version': 'ver1'}
@@ -1257,7 +1270,7 @@ def test_batch_create_edge_fail_not_edge_collection(arango_db):
 
     b = att.get_batch_updater()
 
-    check_exception(lambda: b.create_edge('i', {}, {}, 'v', 6, {}), ValueError,
+    check_exception(lambda: b.create_edge('i', {}, {}, 'v', 6, 5, {}), ValueError,
         'Batch updater is configured for a vertex collection')
 
 def test_batch_set_last_version_on_vertex(arango_db):

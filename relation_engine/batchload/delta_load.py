@@ -71,14 +71,14 @@ def load_graph_delta(
     db.register_load_start(
         load_namespace, load_version, timestamp, release_timestamp, _get_current_timestamp())
 
-    _process_verts(db, vertex_source, timestamp, load_version, batch_size)
+    _process_verts(db, vertex_source, timestamp, release_timestamp, load_version, batch_size)
     if merge_source:
-        _process_merges(db, merge_source, timestamp, load_version, batch_size)
+        _process_merges(db, merge_source, timestamp, release_timestamp, load_version, batch_size)
     
     if _VERBOSE: print(f'expiring vertices: {_time.time()}')
     db.expire_extant_vertices_without_last_version(timestamp - 1, load_version)
 
-    _process_edges(db, edge_source, timestamp, load_version, batch_size)
+    _process_edges(db, edge_source, timestamp, release_timestamp, load_version, batch_size)
     
     if _VERBOSE: print(f'expiring edges: {_time.time()}')
     for col in db.get_edge_collections():
@@ -90,7 +90,7 @@ def load_graph_delta(
 def _get_current_timestamp():
     return int(_dt.datetime.now(tz=_dt.timezone.utc).timestamp() * 1000)
 
-def _process_verts(db, vertex_source, timestamp, load_version, batch_size):
+def _process_verts(db, vertex_source, timestamp, release_timestamp, load_version, batch_size):
     """
     For each vertex we're importing, either replace and expire an existing vertex, create a
     new vertex, or leave an existing vertex unchanged, updating its version.
@@ -108,17 +108,17 @@ def _process_verts(db, vertex_source, timestamp, load_version, batch_size):
         for v in vertices:
             dbv = dbverts.get(v[_ID])
             if not dbv:
-                bulk.create_vertex(v[_ID], load_version, timestamp, v)
+                bulk.create_vertex(v[_ID], load_version, timestamp, release_timestamp, v)
             elif not _special_equal(v, dbv):
                 bulk.expire_vertex(dbv[_KEY], timestamp - 1)
-                bulk.create_vertex(v[_ID], load_version, timestamp, v)
+                bulk.create_vertex(v[_ID], load_version, timestamp, release_timestamp, v)
             else:
                 # mark node as seen in this version
                 bulk.set_last_version_on_vertex(dbv[_KEY], load_version)
         if _VERBOSE: print(f'  updating {bulk.count()} vertices: {_time.time()}')
         bulk.update()
 
-def _process_merges(db, merge_source, timestamp, load_version, batch_size):
+def _process_merges(db, merge_source, timestamp, release_timestamp, load_version, batch_size):
     """
     For each merge edge, if both vertices exist in the current graph (it is expected that vertices
     have been updated by _process_verts), add the merge edge to the database.
@@ -144,14 +144,15 @@ def _process_merges(db, merge_source, timestamp, load_version, batch_size):
             # so we don't worry about it for now.
             if dbmerged and dbtarget:
                 vertbulk.expire_vertex(dbmerged[_KEY], timestamp - 1)
-                bulk.create_edge(m[_ID], dbmerged, dbtarget, load_version, timestamp, m)
+                bulk.create_edge(
+                    m[_ID], dbmerged, dbtarget, load_version, timestamp, release_timestamp, m)
         if _VERBOSE: print(f'  updating {bulk.count()} edges: {_time.time()}')
         bulk.update()
         if _VERBOSE: print(f'  updating {vertbulk.count()} vertices: {_time.time()}')
         vertbulk.update()
 
 # assumes verts have been processed
-def _process_edges(db, edge_source, timestamp, load_version, batch_size):
+def _process_edges(db, edge_source, timestamp, release_timestamp, load_version, batch_size):
     """
     For each edge we're importing, either replace and expire an existing edge, create a
     new edge, or leave an existing edge unchanged, updating its version.
@@ -205,11 +206,12 @@ def _process_edges(db, edge_source, timestamp, load_version, batch_size):
                         dbe['_from'] != from_['_id'] or
                         dbe['_to'] != to['_id']):
                     bulk.expire_edge(dbe, timestamp - 1)
-                    bulk.create_edge(e[_ID], from_, to, load_version, timestamp, e)
+                    bulk.create_edge(
+                        e[_ID], from_, to, load_version, timestamp, release_timestamp, e)
                 else:
                     bulk.set_last_version_on_edge(dbe, load_version)
             else:
-                bulk.create_edge(e[_ID], from_, to, load_version, timestamp, e)
+                bulk.create_edge(e[_ID], from_, to, load_version, timestamp, release_timestamp, e)
         for b in bulkset.values():
             if _VERBOSE:
                 print(f'  updating {b.count()} edges in {b.get_collection()}: {_time.time()}')
@@ -220,6 +222,7 @@ def _process_edges(db, edge_source, timestamp, load_version, batch_size):
 # arango db api is leaking a bit here, but the chance we're going to rewrite this for something
 # else is pretty tiny
 _SPECIAL_EQUAL_IGNORED_FIELDS = ['_id', _KEY, '_to', '_from', 'created', 'expired',
+                                 'release_created', 'release_expired',
                                  'first_version', 'last_version']
 
 def _special_equal(doc1, doc2):
